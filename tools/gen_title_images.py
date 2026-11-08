@@ -516,7 +516,7 @@ def main():
     save(button('끝내기', PASTEL['sky'], 82, False), 'title', 'button_quit.png')
     save(button('끝내기', PASTEL['sky'], 82, True), 'title', 'button_quit_hover.png')
     for i, (name, c) in enumerate(PASTEL.items()):
-        vivid = tuple(max(0, int(v * 0.92)) for v in c)
+        vivid = tuple(max(0, int(255 - (255 - v) * 1.9)) for v in c)  # 배경에 묻히지 않게 진하게
         save(ink_drop(vivid, 90 + i), 'common', f'ink_drop_{name}.png')
         save(brush_dot(c, 110 + i), 'common', f'brush_dot_{name}.png')
         save(bubble(c, 130 + i), 'title', f'bubble_{name}.png')
