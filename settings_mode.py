@@ -15,7 +15,7 @@ from assets import image, folder
 from ui_button import Button
 
 CX, CY = 640, 360
-# 패널 이미지(680x500)에 써 둔 항목 이름과 같은 높이 (gen_title_images.settings_panel 참고)
+# 패널 이미지에 써 둔 항목 이름과 같은 높이 (gen_title_images·gen_title_pastel 의 settings_panel 참고)
 ROW_Y = (460, 390, 320, 250)
 SLIDER_X = 790
 TOGGLE_X = 830
