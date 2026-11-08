@@ -4,13 +4,13 @@
 - 빛 입자가 떠오르고 별이 반짝인다. 마우스는 분필 깃펜이 되어 빛나는 붓자국을 남긴다.
 - 빈 곳을 클릭하면 원소 색 잉크 방울이 톡 튄다.
 - 시작하기(Enter/Space) → 준비 화면, 설정 → 설정 창, 끝내기(ESC) → 종료.
-- T: 그림체 바꾸기 (낙서체 → 몽환 → 스케치북)
+- T / Tab / F2: 그림체 바꾸기 (낙서체 → 몽환 → 스케치북)
 """
 import math
 
 from pico2d import (clear_canvas, update_canvas, get_events, get_canvas_height, hide_cursor, show_cursor,
                     SDL_QUIT, SDL_KEYDOWN, SDL_MOUSEMOTION, SDL_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT,
-                    SDLK_ESCAPE, SDLK_RETURN, SDLK_SPACE, SDLK_t)
+                    SDLK_ESCAPE, SDLK_RETURN, SDLK_SPACE, SDLK_t, SDLK_TAB, SDLK_F2)
 
 import game_framework
 import prepare_mode
@@ -30,7 +30,7 @@ BUTTON_GAP = 262
 INTRO = 1.6  # 로고가 내려앉는 시간(초)
 CURSOR_OFFSET = (26, 26)  # 깃펜 이미지 중심에서 펜촉 끝까지 거리
 
-background = logo = logo_glow = bottle = bottle_glow = light_pool = cursor = None
+background = logo = logo_glow = bottle = bottle_glow = light_pool = cursor = theme_hint = None
 buttons = []
 bubbles = []
 motes = []
@@ -67,9 +67,10 @@ def switch_theme():
 
 
 def load_scene():
-    global background, logo, logo_glow, bottle, bottle_glow, light_pool, cursor
+    global background, logo, logo_glow, bottle, bottle_glow, light_pool, cursor, theme_hint
     global buttons, bubbles, motes, twinkles, splashes, trail, t, mouse
     title = folder('title')
+    theme_hint = image('common', 'hint_theme.png')
     background = image(title, 'background.png')
     logo = image(title, 'logo.png')
     logo_glow = image(title, 'logo_glow.png')
@@ -130,7 +131,7 @@ def handle_events():
             elif event.key in (SDLK_RETURN, SDLK_SPACE):
                 start_game()
                 return
-            elif event.key == SDLK_t:
+            elif event.key in (SDLK_t, SDLK_TAB, SDLK_F2):
                 switch_theme()
         elif event.type == SDL_MOUSEMOTION:
             move_mouse(to_canvas(event))
@@ -215,6 +216,11 @@ def draw_scene():
     trail.draw()
 
 
+def draw_hint():
+    """오른쪽 아래 'T 그림체 바꾸기' 안내."""
+    draw_with_alpha(theme_hint, 0.75 * ease_out((t - INTRO) / INTRO), 1280 - theme_hint.w / 2 - 12, theme_hint.h / 2 + 8)
+
+
 def draw_cursor():
     cursor.draw(mouse[0] + CURSOR_OFFSET[0], mouse[1] + CURSOR_OFFSET[1])
 
@@ -222,5 +228,6 @@ def draw_cursor():
 def draw():
     clear_canvas()
     draw_scene()
+    draw_hint()
     draw_cursor()
     update_canvas()

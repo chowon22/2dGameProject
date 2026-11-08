@@ -847,6 +847,25 @@ def cursor_pen():
     return sh.result()
 
 
+def hint_theme():
+    """그림체 바꾸기 안내: 키캡 'T' + 글씨. 어느 그림체 위에서도 보이게 반투명 남보라 바탕."""
+    w, h = 190, 40
+    sh = Sheet(w, h, seed=901)
+    ss = sh.ss
+    _put(sh, _rounded((w, h), (2, 2, w - 2, h - 2), 18, ss), (70, 58, 110), 150)
+    key = _rounded((w, h), (10, 8, 34, 32), 6, ss)
+    _put(sh, key, WHITE, 235)
+    f = ImageFont.truetype(UI_FONT, 18 * ss)
+    m = Image.new('L', sh.img.size, 0)
+    ImageDraw.Draw(m).text((22 * ss, 20.5 * ss), 'T', font=f, fill=255, anchor='mm')
+    _put(sh, m, (70, 58, 110))
+    m = Image.new('L', sh.img.size, 0)
+    ImageDraw.Draw(m).text((44 * ss, 20.5 * ss), '그림체 바꾸기', font=f,
+                           fill=255, anchor='lm')
+    _put(sh, m, WHITE)
+    return sh.result()
+
+
 def prepare_wip():
     sw, sh_h = 900, 160
     sh = Sheet(sw, sh_h, seed=71)
@@ -893,6 +912,7 @@ def main():
     save(button('닫기', ELEMENT['magenta'], 231, False, (220, 84)), 'settings', 'button_close.png')
     save(button('닫기', ELEMENT['magenta'], 231, True, (220, 84)), 'settings', 'button_close_hover.png')
 
+    save(hint_theme(), 'common', 'hint_theme.png')
     save(prepare_wip(), 'prepare', 'wip_text.png')
 
 
