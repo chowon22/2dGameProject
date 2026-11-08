@@ -131,7 +131,9 @@ class Twinkle:
 
 
 class BrushTrail:
-    """마우스가 지나간 자리에 이어지는 무지갯빛 그라데이션 선. 오래된 쪽부터 가늘어지며 사라진다."""
+    """마우스가 지나간 자리에 이어지는 무지갯빛 그라데이션 선. 오래된 쪽부터 가늘어지며 사라진다.
+    마우스 점들을 부드러운 곡선으로 잇고, 가운데까지 부드러운 둥근 붓 도장(trail_brush, tools/gen_trail_brush.py)을
+    고른 간격으로 촘촘히 찍어 그린다."""
     SPACING = 5
     LIFE = 0.6
     MAX_POINTS = 120
@@ -140,8 +142,7 @@ class BrushTrail:
     COLOR_SPEED = 0.35  # 점 하나마다 색이 넘어가는 정도 (작을수록 그라데이션이 길다)
 
     def __init__(self):
-        self.segments = [image('common', f'trail_segment_{i}.png') for i in range(self.COLOR_STEPS)]
-        self.caps = [image('common', f'trail_cap_{i}.png') for i in range(self.COLOR_STEPS)]
+        self.brushes = [image('common', f'trail_brush_{i}.png') for i in range(self.COLOR_STEPS)]
         self.points = []  # [x, y, age, color_index]
         self.last = None
         self.hue = 0.0
@@ -169,22 +170,53 @@ class BrushTrail:
         if not self.points:
             self.last = None
 
+    STAMP_GAP = 0.15   # 붓 도장 간격 (굵기 대비). 고르게 촘촘히 찍어야 이음새에 점이 안 생긴다
+    STAMP_ALPHA = 0.38  # 도장 하나의 진하기 (여러 장이 겹쳐 선이 된다)
+
+    @staticmethod
+    def _catmull(p0, p1, p2, p3, u):
+        """p1→p2 사이를 부드러운 곡선으로 (Catmull-Rom)."""
+        u2, u3 = u * u, u * u * u
+        return tuple(0.5 * (2 * b + (-a + c) * u + (2 * a - 5 * b + 4 * c - d) * u2 + (-a + 3 * b - 3 * c + d) * u3)
+                     for a, b, c, d in zip(p0, p1, p2, p3))
+
+    def _samples(self):
+        """점들을 지나는 곡선 위의 (x, y, k, 색) 를 촘촘히. k = 남은 수명 비율."""
+        pts = [(x, y, 1 - age / self.LIFE, c) for x, y, age, c in self.points]
+        out = []
+        for i in range(len(pts) - 1):
+            p0, p1, p2 = pts[max(0, i - 1)], pts[i], pts[i + 1]
+            p3 = pts[min(len(pts) - 1, i + 2)]
+            n = max(2, int(math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / 1.5))
+            for j in range(n):
+                u = j / n
+                x, y, k = self._catmull(p0[:3], p1[:3], p2[:3], p3[:3], u)
+                out.append((x, y, k, p1[3] if u < 0.5 else p2[3]))
+        if pts:
+            out.append(pts[-1])
+        return out
+
     def draw(self):
-        for (x0, y0, a0, _), (x1, y1, a1, c) in zip(self.points, self.points[1:]):
-            k = 1 - (a0 + a1) / 2 / self.LIFE
+        """같은 붓 도장을 곡선을 따라 고른 간격으로 찍어 끊김 없는 선을 만든다."""
+        samples = self._samples()
+        if not samples:
+            return
+        carry = 0.0
+        px, py = samples[0][0], samples[0][1]
+        for x, y, k, c in samples:
             if k <= 0:
+                px, py = x, y
                 continue
-            length = math.hypot(x1 - x0, y1 - y0)
-            angle = math.atan2(y1 - y0, x1 - x0)
             thick = self.WIDTH * (0.25 + 0.75 * k)
-            alpha = min(1.0, 0.15 + k)
-            seg, cap = self.segments[c], self.caps[c]
-            # 선 이미지(64x24)의 가운데 띠가 굵기가 되도록 높이를 맞춘다
-            seg.opacify(alpha)
-            seg.composite_draw(angle, '', (x0 + x1) / 2, (y0 + y1) / 2, length + 2, thick * 2.4)
-            cap.opacify(alpha)
-            cap.draw(x1, y1, thick * 2.4, thick * 2.4)
-        for img in self.segments + self.caps:
+            carry += math.hypot(x - px, y - py)
+            px, py = x, y
+            if carry < thick * self.STAMP_GAP:
+                continue
+            carry = 0.0
+            brush = self.brushes[c]
+            brush.opacify(self.STAMP_ALPHA * min(1.0, 0.15 + k))
+            brush.draw(x, y, thick * 2.6, thick * 2.6)
+        for img in self.brushes:
             img.opacify(1)
 
 
