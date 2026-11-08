@@ -21,10 +21,11 @@ from title_effects import Bubble, Mote, Twinkle, BrushTrail, InkSplash, sparkle_
 from ui_button import Button
 
 CX = 640
-LOGO_X = 330
-LOGO_Y = 562
-BOTTLE_Y = 320
-POOL_Y = 118
+# 그림체마다 로고·잉크통 배치가 다르다
+LAYOUTS = {
+    'default': {'logo': (330, 562), 'bottle_y': 320, 'bottle_scale': 1.0},
+    'sketchbook': {'logo': (640, 584), 'bottle_y': 284, 'bottle_scale': 0.84},  # 로고가 가운데 위
+}
 BUTTON_Y = 70
 BUTTON_GAP = 262
 INTRO = 1.6  # 로고가 내려앉는 시간(초)
@@ -176,19 +177,28 @@ def draw_with_alpha(img, alpha, *args):
     img.opacify(1)
 
 
+def layout():
+    return LAYOUTS.get(settings.get('title_theme'), LAYOUTS['default'])
+
+
 def draw_scene():
     """커서를 뺀 타이틀 화면 전체."""
+    lay = layout()
+    logo_x, logo_base_y = lay['logo']
+    bottle_y, sc = lay['bottle_y'], lay['bottle_scale']
     background.draw(CX, 360)
 
     for tw in twinkles:
         tw.draw()
 
     # 잉크통: 둥실 떠 있고 뒤에서 빛이 숨 쉰다
-    float_y = math.sin(t * 1.3) * 10
-    draw_with_alpha(bottle_glow, 0.6 + 0.3 * math.sin(t * 1.7), CX, BOTTLE_Y + float_y)
+    float_y = math.sin(t * 1.3) * 10 * sc
+    draw_with_alpha(bottle_glow, 0.6 + 0.3 * math.sin(t * 1.7), CX, bottle_y + float_y,
+                    bottle_glow.w * sc, bottle_glow.h * sc)
     pool_k = 1 - float_y / 50
-    draw_with_alpha(light_pool, 0.7 * pool_k, CX, POOL_Y, light_pool.w * pool_k, light_pool.h)
-    bottle.composite_draw(math.sin(t * 0.8) * 0.035, '', CX, BOTTLE_Y + float_y, bottle.w, bottle.h)
+    pool_y = bottle_y - bottle.h * sc / 2 - 32 * sc
+    draw_with_alpha(light_pool, 0.7 * pool_k, CX, pool_y, light_pool.w * pool_k * sc, light_pool.h * sc)
+    bottle.composite_draw(math.sin(t * 0.8) * 0.035, '', CX, bottle_y + float_y, bottle.w * sc, bottle.h * sc)
 
     if settings.get('light_motes'):
         for b in bubbles:
@@ -200,9 +210,9 @@ def draw_scene():
 
     # 로고: 처음에 위에서 내려앉으며 나타난다
     k = ease_out(t / INTRO)
-    logo_y = LOGO_Y + (1 - k) * 40 + math.sin(t * 1.1) * 4
-    draw_with_alpha(logo_glow, k * (0.55 + 0.25 * math.sin(t * 1.5)), LOGO_X, logo_y)
-    draw_with_alpha(logo, k, LOGO_X, logo_y)
+    logo_y = logo_base_y + (1 - k) * 40 + math.sin(t * 1.1) * 4
+    draw_with_alpha(logo_glow, k * (0.55 + 0.25 * math.sin(t * 1.5)), logo_x, logo_y)
+    draw_with_alpha(logo, k, logo_x, logo_y)
 
     btn_k = ease_out((t - INTRO * 0.6) / INTRO)
     if btn_k > 0:

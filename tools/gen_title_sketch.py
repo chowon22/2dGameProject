@@ -260,49 +260,82 @@ def background():
 
 # ================================================================ 로고
 def logo():
-    """투박한 손글씨 로고: 연필로 두 번 그은 테두리 + 선 밖으로 삐져나온 크레용."""
-    lw, lh = 560, 320
-    sh = Sheet(lw, lh, seed=701)
+    """스케치북 표지에 큼직하게 적은 제목.
+    - 크레용으로 꽉 채운 I·n·k (글자마다 기울기·높이를 달리해 통통 튀게), 연필 테두리 두 번
+    - 아래로 두른 연필 리본 띠 위에 'what are you do'
+    - 반짝 선·별 낙서
+    """
+    lw, lh = 680, 260
+    sh = Sheet(lw, lh, seed=711)
     ss = sh.ss
     cx = lw / 2
-    m_small = sh.text_mask('what are you do', hand(46), cx, 76, anchor='ms')
-    m_big = sh.text_mask('Ink', hand(210), cx - 10, 244, anchor='ms').filter(ImageFilter.MaxFilter(9))
 
     def lay(mask, color, alpha=255, off=(0, 0)):
-        m = ImageChops.offset(mask, off[0], off[1])
+        m = ImageChops.offset(mask, int(off[0]), int(off[1]))
         if alpha < 255:
             m = m.point(lambda v: v * alpha // 255)
         layer_ = Image.new('RGBA', sh.img.size, tuple(color) + (0,))
         layer_.putalpha(m)
         sh.img.alpha_composite(layer_)
 
-    # 흰 종이 조각 바탕 (스케치북 위에서 글씨가 또렷하게)
-    blob = m_big.filter(ImageFilter.MaxFilter(41)).filter(ImageFilter.GaussianBlur(4 * ss))
-    lay(blob.point(lambda v: 255 if v > 80 else 0), (255, 252, 244), 210)
-    # 'Ink': 글자마다 크레용 색, 선 밖으로 삐져나오게 칠한 뒤 연필 테두리 두 번
-    arr = np.asarray(m_big) > 128
-    cols = np.where(arr.any(axis=0))[0]
-    x0, x1 = cols[0] / ss, cols[-1] / ss
-    for k, key in enumerate(('red', 'green', 'blue')):
-        a, b = x0 + (x1 - x0) * k / 3, x0 + (x1 - x0) * (k + 1) / 3
-        part = Image.new('L', sh.img.size, 0)
-        ImageDraw.Draw(part).rectangle([(a - 4) * ss, 0, (b + 4) * ss, lh * ss], fill=255)
-        part = ImageChops.multiply(part, m_big)
-        spill = ImageChops.offset(part.filter(ImageFilter.MaxFilter(11)), 5 * ss, -4 * ss)
-        crayon_mask(sh, spill.resize((lw, lh), Image.BILINEAR), ELEMENT[key], (a - 20, 60, b + 20, 280),
-                    coverage=1.0, stroke=5, gap=5)
-    edge = ImageChops.subtract(m_big.filter(ImageFilter.MaxFilter(7)), m_big.filter(ImageFilter.MinFilter(3)))
-    lay(edge, PENCIL, 255)
-    lay(edge, PENCIL, 130, (3 * ss, 2 * ss))
-    # 윗줄: 연필 손글씨 (두 번)
-    lay(m_small, PENCIL, 255)
-    lay(m_small, PENCIL, 110, (2 * ss, 1 * ss))
-    # 밑줄과 장식
-    rough_line(sh, [(cx - 150, 270), (cx - 40, 264), (cx + 60, 272), (cx + 170, 262)], 4, PENCIL, 235)
-    star_doodle(sh, cx + 196, 120, 14, (220, 170, 60), 255, 3.2)
-    star_doodle(sh, cx - 200, 150, 9, (220, 170, 60), 255, 2.6)
-    heart(sh, cx + 190, 230, 10, (226, 110, 150), 255, 3.0)
-    return sh.result(crop=True, margin=10)
+    # ---- 리본 띠 (먼저 그려서 글자 뒤로)
+    by, bh_, bw_ = 206, 48, 520
+    arc = lambda x: 10 * ((x - cx) / (bw_ / 2)) ** 2  # 가운데가 살짝 위로 휜 띠
+    top_edge = [(x, by - bh_ / 2 + arc(x)) for x in range(int(cx - bw_ / 2), int(cx + bw_ / 2) + 1, 20)]
+    bot_edge = [(x, by + bh_ / 2 + arc(x)) for x in range(int(cx + bw_ / 2), int(cx - bw_ / 2) - 1, -20)]
+    band = wobbly(top_edge + bot_edge, sh.rng, 1.5)
+    # 양 끝 접힌 꼬리 (V자로 파인 끝)
+    for side in (-1, 1):
+        ex = cx + side * bw_ / 2
+        ey = by + arc(ex)
+        tail = wobbly([(ex - side * 6, ey - bh_ / 2 + 12), (ex + side * 64, ey - bh_ / 2 + 18),
+                       (ex + side * 46, ey + 6), (ex + side * 66, ey + bh_ / 2 + 16), (ex - side * 6, ey + bh_ / 2 + 8)],
+                      sh.rng, 1.2)
+        crayon(sh, tail, (236, 196, 120), size=(lw, lh), coverage=1.0, stroke=4, gap=4, spill=2, angle=-0.4)
+        rough_shape(sh, tail + [tail[0]], PENCIL, 3.4, 240)
+    crayon(sh, band, (255, 226, 150), size=(lw, lh), coverage=1.0, stroke=4.4, gap=4, spill=2, angle=-0.3)
+    rough_shape(sh, band + [band[0]], PENCIL, 3.6, 245)
+    sh.ink_text('what are you do', hand(40), cx, by + 3, PENCIL, 255, anchor='mm')
+
+    # ---- I · n · k : 글자마다 따로 기울여 찍고 크레용으로 채움
+    big = ImageFont.truetype(FONT_PATH, int(184 * ss))
+    letters = (('I', ELEMENT['red'], -9, 6), ('n', ELEMENT['green'], 6, -4), ('k', ELEMENT['blue'], -5, 2))
+    widths = [big.getlength(c) / ss for c, *_ in letters]
+    gap_ = 18
+    x = cx - (sum(widths) + gap_ * 2) / 2
+    masks = []
+    for (ch, color, ang, dy), wch in zip(letters, widths):
+        l_, t_, r_, b_ = big.getbbox(ch)
+        cm = Image.new('L', (r_ - l_ + 60, b_ - t_ + 60), 0)
+        ImageDraw.Draw(cm).text((30 - l_, 30 - t_), ch, font=big, fill=255)
+        cm = cm.rotate(ang, resample=Image.BICUBIC, expand=True).filter(ImageFilter.MaxFilter(17))
+        m = Image.new('L', sh.img.size, 0)
+        m.paste(cm, (int((x + wch / 2) * ss - cm.width / 2), int((104 + dy) * ss - cm.height / 2)))
+        masks.append((m, color))
+        x += wch + gap_
+    for m, color in masks:
+        lay(m.filter(ImageFilter.MaxFilter(21)), (255, 253, 246), 255)          # 종이 흰 테두리
+    for m, color in masks:
+        spill = ImageChops.offset(m.filter(ImageFilter.MaxFilter(9)), 4 * ss, -3 * ss)
+        crayon_mask(sh, spill.resize((lw, lh), Image.BILINEAR), color, (0, 0, lw, lh), coverage=1.0, stroke=5, gap=4)
+        # 하이라이트 낙서 (밝은 크레용 짧은 선)
+        arr = np.asarray(m) > 128
+        ys_, xs_ = np.where(arr)
+        hx, hy = xs_.min() / ss + 10, ys_.min() / ss + 16
+        sh.stroke([(hx, hy + 16), (hx + 2, hy)], 4, lighter(color, 110), 230, amp=0.5)
+        edge = ImageChops.subtract(m.filter(ImageFilter.MaxFilter(7)), m.filter(ImageFilter.MinFilter(3)))
+        lay(edge, PENCIL, 255)
+        lay(edge, PENCIL, 120, (3 * ss, 2 * ss))
+
+    # ---- 장식
+    for (bx, by_, ang0) in ((cx - 190, 60, math.pi * 1.1), (cx + 196, 52, -math.pi * 0.1)):
+        for k in range(3):  # 반짝 선 세 줄
+            a = ang0 + (k - 1) * 0.45
+            rough_line(sh, [(bx + math.cos(a) * 8, by_ + math.sin(a) * 8), (bx + math.cos(a) * 26, by_ + math.sin(a) * 26)],
+                       3.4, (220, 170, 60), 245, passes=1, overshoot=2)
+    star_doodle(sh, cx + 236, 110, 12, (220, 170, 60), 255, 3.2)
+    star_doodle(sh, cx - 240, 120, 9, (220, 170, 60), 255, 2.8)
+    return sh.result(crop=True, margin=8)
 
 
 # ================================================================ 모래시계
