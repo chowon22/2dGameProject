@@ -28,8 +28,8 @@ LAYOUTS = {
     'default': {'logo': (330, 562), 'bottle_y': 320, 'bottle_scale': 1.0},
     'sketchbook': {'logo': (640, 584), 'bottle_y': 284, 'bottle_scale': 0.84},  # 로고가 가운데 위
     'ink': {'logo': (640, 572), 'bottle_y': 264, 'bottle_scale': 0.84},
-    # 처음 만든 파스텔 수채화: 로고 가운데 위, 그 아래 부제목, 쪽지 버튼이 커서 간격을 넓힌다
-    'pastel': {'logo': (640, 585), 'subtitle_y': 472, 'bottle_y': 292, 'bottle_scale': 1.0,
+    # 처음 만든 파스텔 수채화: 검정 잉크 로고가 모래시계 위에, 쪽지 버튼이 커서 간격을 넓힌다
+    'pastel': {'logo': (640, 548), 'bottle_y': 256, 'bottle_scale': 0.85,
                'button_gap': 300, 'button_y': 78},
 }
 DYE_START, DYE_TIME = 0.5, 6.0  # 물들이기: 시작 시각과 다 번지는 데 걸리는 시간(초)
