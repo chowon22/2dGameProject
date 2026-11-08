@@ -145,6 +145,53 @@ class Sheet:
                 self.stroke(seg, width, color, alpha, amp=0.6)
             c += gap * self.rng.uniform(0.85, 1.15)
 
+    def stroke_fast(self, points, width=3.0, color=None, alpha=255, amp=1.3):
+        """흔들린 경로를 한 번에 선으로 긋는다. 넓은 낙서 채우기용 (도장 방식보다 훨씬 빠르다)."""
+        s = self.ss
+        color = self.line if color is None else color
+        pts = _wobble([(x * s, y * s) for x, y in points], amp * s, self.rng, 2.0 * s)
+        self.draw.line(pts, fill=tuple(color) + (alpha,), width=max(1, int(width * s)), joint='curve')
+
+    def fill_poly(self, points, color, alpha=255):
+        """다각형을 단색으로 채운다 (낙서 채우기의 바탕)."""
+        m = Image.new('L', self.img.size, 0)
+        s = self.ss
+        ImageDraw.Draw(m).polygon([(x * s, y * s) for x, y in points], fill=alpha)
+        layer = Image.new('RGBA', self.img.size, tuple(color) + (0,))
+        layer.putalpha(m)
+        self.img.alpha_composite(layer)
+
+    def scribble(self, box, color, alpha=150, gap=7.0, angle=-0.6, width=2.2, mask=None, amp=1.6):
+        """크레용으로 왔다 갔다 끄적인 낙서 채우기. mask(L, 원래 크기)가 있으면 그 안쪽만."""
+        x0, y0, x1, y1 = box
+        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+        span = math.hypot(x1 - x0, y1 - y0)
+        dx, dy = math.cos(angle), math.sin(angle)
+        px, py = -dy, dx
+        n = int(span / gap) + 2
+        pts = []
+        for i in range(-n // 2, n // 2 + 1):
+            off = i * gap + self.rng.uniform(-0.3, 0.3) * gap
+            side = 1 if i % 2 else -1
+            half = span / 2 * self.rng.uniform(0.85, 1.05)
+            pts.append((cx + px * off + dx * half * side, cy + py * off + dy * half * side))
+        tmp = Sheet(self.w, self.h, seed=self.rng.randint(0, 99999), ss=self.ss)
+        tmp.stroke_fast(pts, width, color, alpha, amp)
+        if mask is None:
+            self.img.alpha_composite(tmp.img)
+        else:
+            self.masked(tmp, mask)
+
+    def add_glow(self, color, blur=8.0, strength=1.0):
+        """지금까지 그린 모양 뒤에 color 빛 번짐을 깐다."""
+        a = self.img.split()[3].filter(ImageFilter.GaussianBlur(blur * self.ss))
+        a = Image.fromarray(np.clip(np.asarray(a, np.float32) * strength, 0, 255).astype(np.uint8))
+        glow = Image.new('RGBA', self.img.size, tuple(color) + (0,))
+        glow.putalpha(a)
+        glow.alpha_composite(self.img)
+        self.img = glow
+        self.draw = ImageDraw.Draw(self.img)
+
     # ---- 수채화
     def wash(self, cx, cy, rx, ry, color, alpha=120, layers=4, edge=1.4, blur=3.0, wobble=0.14):
         """여러 겹의 흐린 얼룩을 겹치고 가장자리를 진하게 해 수채화 번짐을 만든다."""
