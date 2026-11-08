@@ -16,7 +16,7 @@ import numpy as np
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
 sys.path.insert(0, os.path.dirname(__file__))
-from sketch import Sheet, font, bezier, ellipse_points, PASTEL, PLUM, INK, WATERCOLOR  # noqa: E402
+from sketch import Sheet, font, bezier, ellipse_points, paper, PASTEL, PLUM, INK, WATERCOLOR  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FONTS = os.path.join(ROOT, 'fonts')
@@ -203,7 +203,7 @@ def logo():
         m_ink = ImageChops.lighter(m_ink, m)
 
     # ---- 흰 종이 테두리 + 보랏빛 그늘
-    halo = ImageChops.lighter(m_small.filter(ImageFilter.MaxFilter(15)), m_ink.filter(ImageFilter.MaxFilter(23)))
+    halo = ImageChops.lighter(m_small.filter(ImageFilter.MaxFilter(15)), m_ink.filter(ImageFilter.MaxFilter(29)))
     lay(sh, ImageChops.offset(halo, 3 * ss, 5 * ss).filter(ImageFilter.GaussianBlur(5 * ss)), PLUM, 90)
     lay(sh, halo.filter(ImageFilter.GaussianBlur(1.2 * ss)), (255, 253, 250))
 
@@ -223,7 +223,7 @@ def logo():
         fill.wash(lx + wch / 2, base - 40, wch * 0.5, 50, tuple(int(v * 0.85) for v in tint), alpha=170, layers=3, blur=5)
         fill.wash(lx + wch * 0.35, base - 110, wch * 0.18, 18, WHITE, alpha=150, layers=2, blur=3)
         sh.masked(fill, small_m)
-    outline = ImageChops.subtract(m_ink.filter(ImageFilter.MaxFilter(7)), m_ink)
+    outline = ImageChops.subtract(m_ink.filter(ImageFilter.MaxFilter(13)), m_ink)  # 굵은 펜 테두리
     lay(sh, outline, PLUM)
 
     # ---- 장식: 밑줄 물결, 물감 방울, 반짝이
@@ -397,11 +397,44 @@ def color_background():
 
 
 def gray_background(col):
-    """색을 빼앗긴 세상: 밝기만 남기고 종이빛 흑백으로."""
-    g = np.asarray(col.convert('L'), np.float32)
-    g = 70 + g * 0.72  # 살짝 밝고 부드럽게
-    paper_tone = np.array((1.0, 0.985, 0.96), np.float32)
-    return Image.fromarray(np.clip(g[..., None] * paper_tone, 0, 255).astype(np.uint8), 'RGB')
+    """색을 빼앗긴 세상: 물체마다 다른 회색으로 칠한 흑백 동화 그림.
+    색마다 다른 회색으로 바꾸면 보랏빛 펜 선은 저절로 짙은 먹색이 되어 컬러 그림과 굵기가 같다.
+    어두운 곳(동굴 안)엔 연필 빗금을 더한다."""
+    w, h = col.size
+    lum_img = col.convert('L')
+
+    # 그늘 정도 (넓게 흐린 밝기) → 두 단계 빗금
+    soft = np.asarray(lum_img.filter(ImageFilter.GaussianBlur(4)), np.float32)
+    tone = np.clip((240 - soft) / 80, 0, 1)  # 옅은 먹 번짐용
+    dark = np.clip((182 - soft) / 60, 0, 1)  # 빗금은 하늘보다 어두운 곳에만
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    rng = np.random.default_rng(93)
+    wob = np.asarray(Image.fromarray((rng.random((h // 20 + 1, w // 20 + 1)) * 255).astype(np.uint8))
+                     .resize((w, h), Image.BICUBIC), np.float32) / 255
+    def stripes(u, gap, width):
+        ph = (u + wob * 3) % gap
+        return np.clip(1 - np.abs(ph - gap / 2) / width, 0, 1)
+    hatch1 = stripes(xx + yy * 0.9, 8.0, 1.1) * np.clip(dark / 0.3, 0, 1)
+    hatch2 = stripes(xx - yy * 1.1, 10.0, 1.0) * np.clip((dark - 0.45) / 0.3, 0, 1)
+    breakup = np.asarray(Image.fromarray((rng.random((h // 5 + 1, w // 5 + 1)) * 255).astype(np.uint8))
+                         .resize((w, h), Image.BICUBIC), np.float32) / 255
+    hatch = np.clip(hatch1 + hatch2, 0, 1) * (0.45 + 0.55 * breakup) * 0.5
+    wash = tone * 0.14                                                 # 아주 옅은 먹 번짐
+
+    # 물체마다 다른 회색: 파스텔 색은 밝기가 비슷해 그냥 흑백으로 바꾸면 한 가지 회색이 된다.
+    # 파랑을 빼고 빨강·초록으로 밝기를 매긴 뒤 대비를 키워, 하늘·라벤더는 짙게 · 분홍·레몬은 옅게 갈라 놓는다.
+    rgb = np.asarray(col, np.float32)
+    g = rgb[..., 0] * 0.62 + rgb[..., 1] * 0.38
+    g = 250 - (250 - g) * 1.6
+    g = np.asarray(Image.fromarray(np.clip(g, 0, 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(0.4)),
+                   np.float32)
+    grain = np.asarray(paper(w, h, seed=97).convert('L'), np.float32) / 244  # 도화지 결
+    gray = np.clip(g * grain, 40, 255)[..., None] * np.array((1.0, 0.985, 0.965), np.float32)
+
+    ink = np.array((46, 42, 52), np.float32)
+    k = np.clip(wash * 0.5 + hatch, 0, 1)[..., None]
+    out = gray * (1 - k) + ink * k
+    return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), 'RGB')
 
 
 def dye_frames(col):
