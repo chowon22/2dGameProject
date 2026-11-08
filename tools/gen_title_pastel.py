@@ -91,7 +91,7 @@ def light_pool():
     return sh.result()
 
 
-def ink_bottle():
+def ink_bottle(stream=True):
     """처음 버전 모래시계 잉크통과 같은 모양. 위 칸엔 빼앗긴 세상의 검정 잉크, 아래 칸엔 되찾은 색이 쌓인다."""
     bw, bh = 220, 320
     cx = bw / 2
@@ -116,8 +116,9 @@ def ink_bottle():
     color.masked(ink_fill, pool_mask)
     color.wash(cx, top + 30, 60, 22, WHITE, alpha=130, layers=2, blur=4)
     # 가운데로 떨어지는 줄기: 위는 검정, 아래로 가며 보랏빛 물감이 된다
-    color.stroke([(cx, neck - 20), (cx + 1, neck + 4)], 3, INK, 240, amp=0.5)
-    color.stroke([(cx + 1, neck + 4), (cx, bottom - 30)], 3, (180, 120, 200), 230, amp=0.5)
+    if stream:  # 되찾은 색 그림체는 줄기 대신 떨어지는 잉크 방울을 움직여 그린다
+        color.stroke([(cx, neck - 20), (cx + 1, neck + 4)], 3, INK, 240, amp=0.5)
+        color.stroke([(cx + 1, neck + 4), (cx, bottom - 30)], 3, (180, 120, 200), 230, amp=0.5)
     color.wash(cx - 22, bottom - 16, 34, 16, WATERCOLOR['red'], alpha=220, layers=3)
     color.wash(cx + 20, bottom - 14, 32, 15, WATERCOLOR['blue'], alpha=220, layers=3)
     color.wash(cx, bottom - 24, 22, 12, WATERCOLOR['green'], alpha=220, layers=3)
@@ -166,12 +167,14 @@ def hand_font(size):
     return ImageFont.truetype(os.path.join(FONTS, HAND), size)
 
 
-def logo():
-    """한 줄 로고: 보랏빛 펜 손글씨 'what are you do' + 수채 물감으로 칠한 큰 'Ink'.
-    배경처럼 펜 선 테두리 + 물감 번짐, 흰 종이 테두리로 또렷하게."""
-    lw, lh = 1060, 300
-    sh = Sheet(lw, lh, seed=401)
-    ss = sh.ss
+LOGO_SIZE = (1060, 300)
+
+
+def logo_masks(ss):
+    """한 줄 로고의 글자 마스크 (ss 크기). 파스텔·되찾은 색 로고가 같이 쓴다.
+    반환: 'what are you do' 마스크, [(글자 마스크, 왼쪽 x, 폭)] × I·n·k, Ink 전체 마스크, 배치 값."""
+    lw, lh = LOGO_SIZE
+    size = (lw * ss, lh * ss)
     small = hand_font(int(88 * ss))
     big = hand_font(int(172 * ss))
     line = 'what are you do'
@@ -182,9 +185,7 @@ def logo():
     total = w_small + gap_word + sum(widths) + gap_ch * 2
     x0 = (lw - total) / 2
     base = 196  # 글자 밑선 (PIL y)
-
-    # ---- 글자 마스크
-    m_small = Image.new('L', sh.img.size, 0)
+    m_small = Image.new('L', size, 0)
     ImageDraw.Draw(m_small).text((x0 * ss, base * ss), line, font=small, fill=255, anchor='ls')
     m_small = m_small.filter(ImageFilter.MaxFilter(3))
     masks = []
@@ -194,13 +195,23 @@ def logo():
         cm = Image.new('L', (r_ - l_ + 80, b_ - t_ + 80), 0)
         ImageDraw.Draw(cm).text((40 - l_, 40 - t_), ch, font=big, fill=255, anchor='ls')
         cm = cm.rotate(ang, resample=Image.BICUBIC, expand=True)
-        m = Image.new('L', sh.img.size, 0)
+        m = Image.new('L', size, 0)
         m.paste(cm, (int((x + wch / 2) * ss - cm.width / 2), int((base + dy + (t_ + b_) / 2 / ss) * ss - cm.height / 2)))
         masks.append((m.filter(ImageFilter.MaxFilter(17)), x, wch))
         x += wch + gap_ch
     m_ink = masks[0][0]
     for m, *_ in masks[1:]:
         m_ink = ImageChops.lighter(m_ink, m)
+    return m_small, masks, m_ink, (x0, w_small, gap_word, widths, base)
+
+
+def logo():
+    """한 줄 로고: 보랏빛 펜 손글씨 'what are you do' + 수채 물감으로 칠한 큰 'Ink'.
+    배경처럼 펜 선 테두리 + 물감 번짐, 흰 종이 테두리로 또렷하게."""
+    lw, lh = LOGO_SIZE
+    sh = Sheet(lw, lh, seed=401)
+    ss = sh.ss
+    m_small, masks, m_ink, (x0, w_small, gap_word, widths, base) = logo_masks(ss)
 
     # ---- 흰 종이 테두리 + 보랏빛 그늘
     halo = ImageChops.lighter(m_small.filter(ImageFilter.MaxFilter(15)), m_ink.filter(ImageFilter.MaxFilter(29)))

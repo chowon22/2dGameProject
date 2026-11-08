@@ -17,7 +17,23 @@ THEME_FOLDERS = {
     'sketchbook': {'title': 'title_sketch', 'settings': 'settings_sketch'},
     'ink': {'title': 'title_ink', 'settings': 'settings_ink'},
     'pastel': {'title': 'title_pastel', 'settings': 'settings_pastel'},
+    'restore': {'title': 'title_restore', 'settings': 'settings_pastel'},
 }
+
+
+# 폴더에 없는 파일은 바탕이 되는 그림체 폴더에서 찾는다 (같은 그림을 복사해 두지 않으려고)
+FALLBACK = {'title_restore': 'title_pastel'}
+
+
+def _resolve(parts):
+    path = os.path.join(IMAGE_DIR, *parts)
+    if not os.path.exists(path) and parts and parts[0] in FALLBACK:
+        return _resolve((FALLBACK[parts[0]],) + tuple(parts[1:]))
+    return path
+
+
+def exists(*parts):
+    return os.path.exists(_resolve(parts))
 
 
 def folder(name):
@@ -27,7 +43,7 @@ def folder(name):
 
 def image(*parts):
     """image('title', 'logo.png') → image/title/logo.png. open_canvas() 뒤에만 부를 수 있다."""
-    path = os.path.join(IMAGE_DIR, *parts)
+    path = _resolve(parts)
     if path not in _cache:
         _cache[path] = load_image(path)
     return _cache[path]
