@@ -4,7 +4,7 @@
 - 빛 입자가 떠오르고 별이 반짝인다. 마우스는 분필 깃펜이 되어 빛나는 붓자국을 남긴다.
 - 빈 곳을 클릭하면 원소 색 잉크 방울이 톡 튄다.
 - 시작하기(Enter/Space) → 준비 화면, 설정 → 설정 창, 끝내기(ESC) → 종료.
-- T / Tab / F2: 그림체 바꾸기 (낙서체 → 몽환 → 스케치북 → 잉크)
+- T / Tab / F2: 그림체 바꾸기 (낙서체 → 몽환 → 스케치북 → 잉크 → 파스텔)
 - 잉크 그림체는 펜으로 그린 흑백 동화 세상에서 시작해 잉크통에서부터 수채 물감이 번져 색이 칠해진다
 """
 import math
@@ -28,6 +28,9 @@ LAYOUTS = {
     'default': {'logo': (330, 562), 'bottle_y': 320, 'bottle_scale': 1.0},
     'sketchbook': {'logo': (640, 584), 'bottle_y': 284, 'bottle_scale': 0.84},  # 로고가 가운데 위
     'ink': {'logo': (640, 572), 'bottle_y': 264, 'bottle_scale': 0.84},
+    # 처음 만든 파스텔 수채화: 로고 가운데 위, 그 아래 부제목, 쪽지 버튼이 커서 간격을 넓힌다
+    'pastel': {'logo': (640, 585), 'subtitle_y': 472, 'bottle_y': 292, 'bottle_scale': 1.0,
+               'button_gap': 300, 'button_y': 78},
 }
 DYE_START, DYE_TIME = 0.5, 6.0  # 물들이기: 시작 시각과 다 번지는 데 걸리는 시간(초)
 BUTTON_Y = 70
@@ -35,7 +38,7 @@ BUTTON_GAP = 262
 INTRO = 1.6  # 로고가 내려앉는 시간(초)
 CURSOR_OFFSET = (26, 26)  # 깃펜 이미지 중심에서 펜촉 끝까지 거리
 
-background = logo = logo_glow = bottle = bottle_glow = light_pool = cursor = theme_hint = None
+background = logo = logo_glow = subtitle = bottle = bottle_glow = light_pool = cursor = theme_hint = None
 dye = []  # 물들이기 단계별 색 층 (있는 그림체만)
 buttons = []
 bubbles = []
@@ -73,7 +76,7 @@ def switch_theme():
 
 
 def load_scene():
-    global background, logo, logo_glow, bottle, bottle_glow, light_pool, cursor, theme_hint, dye
+    global background, logo, logo_glow, subtitle, bottle, bottle_glow, light_pool, cursor, theme_hint, dye
     global buttons, bubbles, motes, twinkles, splashes, trail, t, mouse
     title = folder('title')
     theme_hint = image('common', 'hint_theme.png')
@@ -86,12 +89,16 @@ def load_scene():
     bottle = image(title, 'ink_bottle.png')
     bottle_glow = image(title, 'bottle_glow.png')
     light_pool = image(title, 'light_pool.png')
+    has_subtitle = os.path.exists(os.path.join(IMAGE_DIR, title, 'subtitle.png'))
+    subtitle = image(title, 'subtitle.png') if has_subtitle else None
     cursor = image('common', 'cursor_pen.png')
 
+    lay = layout()
+    gap, by = lay.get('button_gap', BUTTON_GAP), lay.get('button_y', BUTTON_Y)
     buttons = [
-        Button(CX - BUTTON_GAP, BUTTON_Y, 'button_start.png', 'button_start_hover.png', start_game, 0.0, title),
-        Button(CX, BUTTON_Y, 'button_settings.png', 'button_settings_hover.png', open_settings, 0.8, title),
-        Button(CX + BUTTON_GAP, BUTTON_Y, 'button_quit.png', 'button_quit_hover.png', game_framework.quit, 1.6,
+        Button(CX - gap, by, 'button_start.png', 'button_start_hover.png', start_game, 0.0, title),
+        Button(CX, by, 'button_settings.png', 'button_settings_hover.png', open_settings, 0.8, title),
+        Button(CX + gap, by, 'button_quit.png', 'button_quit_hover.png', game_framework.quit, 1.6,
                title),
     ]
     bubbles = [Bubble(start_anywhere=True) for _ in range(12)]
@@ -235,6 +242,8 @@ def draw_scene():
     logo_y = logo_base_y + (1 - k) * 40 + math.sin(t * 1.1) * 4
     draw_with_alpha(logo_glow, k * (0.55 + 0.25 * math.sin(t * 1.5)), logo_x, logo_y)
     draw_with_alpha(logo, k, logo_x, logo_y)
+    if subtitle:
+        draw_with_alpha(subtitle, ease_out((t - INTRO * 0.6) / INTRO), CX, lay['subtitle_y'])
 
     btn_k = ease_out((t - INTRO * 0.6) / INTRO)
     if btn_k > 0:

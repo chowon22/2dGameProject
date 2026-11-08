@@ -16,6 +16,7 @@ THEME_FOLDERS = {
     'dreamy': {'title': 'title', 'settings': 'settings'},
     'sketchbook': {'title': 'title_sketch', 'settings': 'settings_sketch'},
     'ink': {'title': 'title_ink', 'settings': 'settings_ink'},
+    'pastel': {'title': 'title_pastel', 'settings': 'settings'},  # 설정 창은 몽환 것과 같이 쓴다
 }
 
 
