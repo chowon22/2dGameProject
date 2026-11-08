@@ -1,24 +1,25 @@
-"""손그림 쪽지 버튼. 마우스를 올리면 색이 진해지고 살짝 커진다."""
+"""분필로 그린 버튼. 마우스를 올리면 원소 색으로 칠해지고 살짝 커진다."""
 import math
 
 import game_framework
 from assets import image
 
-HIT_W, HIT_H = 264, 66  # 이미지(300x96)에서 실제 쪽지 부분만 클릭 범위로 쓴다
+HIT_MARGIN_W, HIT_MARGIN_H = 36, 32  # 이미지 둘레의 빛 번짐 여백은 클릭 범위에서 뺀다
 
 
 class Button:
-    def __init__(self, x, y, normal, hover, on_click, phase=0.0):
+    def __init__(self, x, y, normal, hover, on_click, phase=0.0, folder='title'):
         self.x, self.y = x, y
-        self.normal = image('title', normal)
-        self.hover_image = image('title', hover)
+        self.normal = image(folder, normal)
+        self.hover_image = image(folder, hover)
         self.on_click = on_click
         self.hovered = False
         self.scale = 1.0
         self.t = phase  # 버튼마다 흔들림 박자를 다르게
 
     def contains(self, mx, my):
-        return abs(mx - self.x) <= HIT_W / 2 and abs(my - self.y) <= HIT_H / 2
+        return (abs(mx - self.x) <= (self.normal.w - HIT_MARGIN_W) / 2 and
+                abs(my - self.y) <= (self.normal.h - HIT_MARGIN_H) / 2)
 
     def mouse_move(self, mx, my):
         self.hovered = self.contains(mx, my)
