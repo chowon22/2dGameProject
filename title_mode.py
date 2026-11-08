@@ -264,9 +264,10 @@ def draw_scene():
     pool_k = 1 - float_y / 50
     pool_y = bottle_y - bottle.h * sc / 2 - 32 * sc
     draw_with_alpha(light_pool, 0.7 * pool_k, CX, pool_y, light_pool.w * pool_k * sc, light_pool.h * sc)
-    bottle.composite_draw(math.sin(t * 0.8) * 0.035, '', CX, bottle_y + float_y, bottle.w * sc, bottle.h * sc)
+    tilt = math.sin(t * 0.8) * 0.035
+    bottle.composite_draw(tilt, '', CX, bottle_y + float_y, bottle.w * sc, bottle.h * sc)
     if drip:
-        drip.draw(CX, bottle_y + float_y, sc)
+        drip.draw(CX, bottle_y + float_y, sc, angle=tilt)
 
     ui_k = ui_alpha()
     if settings.get('light_motes') and ui_k > 0:
@@ -274,8 +275,6 @@ def draw_scene():
             b.draw(ui_k)
         for m in motes:
             m.draw(ui_k)
-    for s in splashes:
-        s.draw()
 
     # 로고: 처음에 위에서 내려앉으며 나타난다
     k = ease_out(t / INTRO)
@@ -298,6 +297,10 @@ def draw_scene():
             b.draw()
             b.normal.opacify(1)
             b.hover_image.opacify(1)
+
+    # 클릭 물감 방울은 로고·버튼보다 위에
+    for s_ in splashes:
+        s_.draw()
 
 
 def draw_hint():

@@ -234,19 +234,29 @@ def sparkle_burst(x, y, count=5):
 
 class InkDrip:
     """모래시계 목에서 검정 잉크 방울이 맺혔다 떨어지고, 아래 칸에 닿으면 원소 색 방울로 톡 튄다.
-    위치는 모래시계 중심 기준 (가로 0, 세로 아래로 +), scale 은 모래시계 크기 배율."""
+    거리는 모두 모래시계 중심에서 아래로 잰 값(원래 크기 px)이고, 그릴 때 scale 을 곱한다.
+    - 맺힘: 목 구멍에 위쪽이 붙은 채 커지다가, 떨어지기 직전 아래로 살짝 늘어진다
+    - 떨어짐: 처음엔 느리게, 점점 빨라지며 세로로 조금 늘어난다
+    - 튐: 방울 아래쪽이 쌓인 색에 닿는 순간 색 방울이 튄다"""
     COLORS = ('red', 'green', 'blue')
-    NECK, FLOOR = 4, 82      # 모래시계 중심에서 목·아래 칸 바닥(쌓인 색 위)까지 (원래 크기 px)
-    GROW, GRAVITY = 0.45, 900.0
+    NECK = 8        # 방울이 매달리는 목 구멍 (이음 고리 바로 아래)
+    FLOOR = 102     # 아래 칸에 쌓인 색 (튀는 자리)
+    GROW, GRAVITY = 0.7, 1300.0
     SPLASH_TIME = 0.6
-    DROP_SCALE, SPLASH_SCALE = 1.5, 1.6  # 작은 모래시계 안에서도 잘 보이게
+    DROP_SCALE, SPLASH_SCALE = 1.1, 1.6  # 방울은 목보다 넓지 않게, 튀는 색은 잘 보이게
 
     def __init__(self, phase=0.0):
         self.drop = image(folder('title'), 'drip_black.png')
         self.splash_images = [image(folder('title'), f'drip_splash_{c}.png') for c in self.COLORS]
-        self.state, self.t, self.y, self.v = 'grow', -phase, 0.0, 0.0
+        self.state, self.t, self.d, self.v = 'grow', -phase, 0.0, 0.0
         self.color = 0
         self.splash_t = None
+
+    def _size(self, k):
+        """맺히는 정도 k(0~1) 에서 방울 폭·높이 (원래 크기 px). 끝에서 아래로 늘어진다."""
+        g = 0.25 + 0.75 * (1 - (1 - k) ** 2)
+        sag = 1 + 0.3 * max(0.0, (k - 0.75) / 0.25)
+        return self.drop.w * self.DROP_SCALE * g / (sag ** 0.5), self.drop.h * self.DROP_SCALE * g * sag
 
     def update(self):
         dt = game_framework.frame_time
@@ -256,32 +266,35 @@ class InkDrip:
             if self.splash_t > self.SPLASH_TIME:
                 self.splash_t = None
         if self.state == 'grow' and self.t >= self.GROW:
-            self.state, self.y, self.v = 'fall', 0.0, 40.0
+            _, h = self._size(1.0)
+            self.state, self.d, self.v = 'fall', self.NECK - 1 + h / 2, 0.0  # 떨어지는 방울 중심
         elif self.state == 'fall':
             self.v += self.GRAVITY * dt
-            self.y += self.v * dt
-            if self.y >= self.FLOOR - self.NECK:
-                self.state, self.t = 'grow', -random.uniform(0.15, 0.5)
+            self.d += self.v * dt
+            if self.d + self.drop.h * self.DROP_SCALE * 0.45 >= self.FLOOR:
+                self.state, self.t = 'grow', -random.uniform(0.25, 0.7)
                 self.splash_t, self.color = 0.0, (self.color + 1) % len(self.COLORS)
 
-    def draw(self, x, y, scale, alpha=1.0):
-        neck_y = y - self.NECK * scale
-        ds = scale * self.DROP_SCALE
+    def draw(self, x, y, scale, alpha=1.0, angle=0.0):
+        """x, y = 모래시계 중심. angle = 모래시계 기울기(라디안, 반시계) — 방울도 같이 기울어진 축을 따른다."""
+        sin_a, cos_a = math.sin(angle), math.cos(angle)
+
+        def at(d):  # 중심에서 아래로 d 떨어진 점 (기울기 반영)
+            return x + d * scale * sin_a, y - d * scale * cos_a
+        self.drop.opacify(alpha)
         if self.state == 'grow' and self.t > 0:
-            k = self.t / self.GROW
-            w = self.drop.w * ds * (0.4 + 0.6 * k)
-            self.drop.opacify(alpha)
-            self.drop.draw(x, neck_y - self.drop.h * ds * 0.4 * k, w, self.drop.h * ds * (0.4 + 0.6 * k))
-            self.drop.opacify(1)
+            w, h = self._size(min(1.0, self.t / self.GROW))
+            self.drop.draw(*at(self.NECK - 1 + h / 2), w * scale, h * scale)
         elif self.state == 'fall':
-            stretch = 1 + min(0.5, self.v / 1600)
-            self.drop.opacify(alpha)
-            self.drop.draw(x, neck_y - self.y * scale, self.drop.w * ds / stretch, self.drop.h * ds * stretch)
-            self.drop.opacify(1)
+            stretch = 1 + min(0.35, self.v / 2400)
+            w, h = self.drop.w * self.DROP_SCALE, self.drop.h * self.DROP_SCALE
+            self.drop.draw(*at(self.d), w * scale / stretch, h * scale * stretch)
+        self.drop.opacify(1)
         if self.splash_t is not None:
             k = self.splash_t / self.SPLASH_TIME
             img = self.splash_images[self.color]
             img.opacify(alpha * (1 - k ** 2))
             s = scale * self.SPLASH_SCALE * (0.5 + 0.7 * (1 - (1 - k) ** 3))
-            img.draw(x, y - self.FLOOR * scale + img.h * s / 2 - 6 * scale, img.w * s, img.h * s)
+            sx, sy = at(self.FLOOR)
+            img.draw(sx, sy + img.h * s / 2 - 6 * scale, img.w * s, img.h * s)
             img.opacify(1)
