@@ -17,7 +17,8 @@ DEFAULTS = {
 _values = dict(DEFAULTS)
 
 
-def load(path=PATH):
+def load(path=None):
+    path = path or PATH
     _values.clear()
     _values.update(DEFAULTS)
     try:
@@ -32,7 +33,8 @@ def load(path=PATH):
         _values[key] = min(1.0, max(0.0, float(_values[key])))
 
 
-def save(path=PATH):
+def save(path=None):
+    path = path or PATH
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(_values, f, ensure_ascii=False, indent=2)
