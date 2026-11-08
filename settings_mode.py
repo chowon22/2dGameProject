@@ -137,7 +137,7 @@ def draw():
 
     k = min(1.0, t / OPEN_TIME)
     k = 1 - (1 - k) ** 3
-    dim.opacify(0.55 * k)
+    dim.opacify(0.45 * k)
     dim.draw(CX, CY, 1280, 720)
     dim.opacify(1)
 

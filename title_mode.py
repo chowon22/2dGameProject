@@ -16,20 +16,22 @@ import prepare_mode
 import settings
 import settings_mode
 from assets import image
-from title_effects import Mote, Twinkle, BrushTrail, InkSplash, sparkle_burst
+from title_effects import Bubble, Mote, Twinkle, BrushTrail, InkSplash, sparkle_burst
 from ui_button import Button
 
 CX = 640
-LOGO_Y = 580
+LOGO_X = 330
+LOGO_Y = 562
 BOTTLE_Y = 320
 POOL_Y = 118
 BUTTON_Y = 70
-BUTTON_GAP = 300
+BUTTON_GAP = 262
 INTRO = 1.6  # 로고가 내려앉는 시간(초)
 CURSOR_OFFSET = (26, 26)  # 깃펜 이미지 중심에서 펜촉 끝까지 거리
 
 background = logo = logo_glow = bottle = bottle_glow = light_pool = cursor = None
 buttons = []
+bubbles = []
 motes = []
 twinkles = []
 splashes = []
@@ -48,7 +50,7 @@ def open_settings():
 
 def init():
     global background, logo, logo_glow, bottle, bottle_glow, light_pool, cursor
-    global buttons, motes, twinkles, splashes, trail, t, mouse
+    global buttons, bubbles, motes, twinkles, splashes, trail, t, mouse
     settings.load()
     background = image('title', 'background.png')
     logo = image('title', 'logo.png')
@@ -63,7 +65,8 @@ def init():
         Button(CX, BUTTON_Y, 'button_settings.png', 'button_settings_hover.png', open_settings, 0.8),
         Button(CX + BUTTON_GAP, BUTTON_Y, 'button_quit.png', 'button_quit_hover.png', game_framework.quit, 1.6),
     ]
-    motes = [Mote(start_anywhere=True) for _ in range(36)]
+    bubbles = [Bubble(start_anywhere=True) for _ in range(12)]
+    motes = [Mote(start_anywhere=True) for _ in range(28)]
     twinkles = [Twinkle() for _ in range(14)]
     splashes = []
     trail = BrushTrail()
@@ -126,7 +129,7 @@ def update_ambient():
     global t, splashes, twinkles
     t += game_framework.frame_time
     if settings.get('light_motes'):
-        for m in motes:
+        for m in motes + bubbles:
             m.update()
     for obj in twinkles + splashes:
         obj.update()
@@ -167,6 +170,8 @@ def draw_scene():
     bottle.composite_draw(math.sin(t * 0.8) * 0.035, '', CX, BOTTLE_Y + float_y, bottle.w, bottle.h)
 
     if settings.get('light_motes'):
+        for b in bubbles:
+            b.draw()
         for m in motes:
             m.draw()
     for s in splashes:
@@ -175,8 +180,8 @@ def draw_scene():
     # 로고: 처음에 위에서 내려앉으며 나타난다
     k = ease_out(t / INTRO)
     logo_y = LOGO_Y + (1 - k) * 40 + math.sin(t * 1.1) * 4
-    draw_with_alpha(logo_glow, k * (0.55 + 0.25 * math.sin(t * 1.5)), CX, logo_y)
-    draw_with_alpha(logo, k, CX, logo_y)
+    draw_with_alpha(logo_glow, k * (0.55 + 0.25 * math.sin(t * 1.5)), LOGO_X, logo_y)
+    draw_with_alpha(logo, k, LOGO_X, logo_y)
 
     btn_k = ease_out((t - INTRO * 0.6) / INTRO)
     if btn_k > 0:

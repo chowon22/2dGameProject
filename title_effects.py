@@ -1,13 +1,51 @@
-"""타이틀 화면의 몽환적인 움직임: 빛 입자, 반짝이, 붓자국, 잉크 방울."""
+"""타이틀 화면의 몽환적인 움직임: 비눗방울, 빛 입자, 반짝이, 커서 빛 선, 잉크 방울."""
 import math
 import random
 
 import game_framework
 from assets import image
 
-LIGHT_COLORS = ('white', 'cyan', 'lavender', 'gold', 'pink')       # 빛 입자·붓자국
+LIGHT_COLORS = ('pearl', 'sky', 'lavender', 'gold', 'pink')       # 빛 입자·붓자국
 INK_COLORS = ('red', 'green', 'blue', 'yellow', 'cyan', 'magenta')  # 원소 색 잉크 방울
 SCREEN_W, SCREEN_H = 1280, 720
+
+
+class Bubble:
+    """아래에서 위로 흔들리며 떠오르는 비눗방울 (무지갯빛 테두리)."""
+    COLORS = ('pearl', 'pink', 'lavender', 'sky')
+
+    def __init__(self, start_anywhere=False):
+        self.reset()
+        if start_anywhere:
+            self.y = random.uniform(0, SCREEN_H)
+
+    def reset(self):
+        self.image = image('title', f'bubble_{random.choice(self.COLORS)}.png')
+        self.base_x = random.uniform(40, SCREEN_W - 40)
+        self.y = random.uniform(-90, -30)
+        self.size = random.uniform(24, 64)
+        self.speed = random.uniform(20, 44)
+        self.sway = random.uniform(10, 30)
+        self.phase = random.uniform(0, 2 * math.pi)
+        self.t = 0.0
+
+    @property
+    def x(self):
+        return self.base_x + math.sin(self.t * 0.9 + self.phase) * self.sway
+
+    def update(self):
+        dt = game_framework.frame_time
+        self.t += dt
+        self.y += self.speed * dt
+        if self.y > SCREEN_H + 70:
+            self.reset()
+
+    def draw(self):
+        fade = max(0.0, min(1.0, (SCREEN_H + 50 - self.y) / 240))
+        self.image.opacify((0.75 + 0.2 * math.sin(self.t * 2 + self.phase)) * fade)
+        wobble = 1 + 0.05 * math.sin(self.t * 3 + self.phase)
+        self.image.draw(self.x, self.y, self.size * wobble, self.size / wobble)
+        self.image.opacify(1)
 
 
 class Mote:
@@ -93,46 +131,60 @@ class Twinkle:
 
 
 class BrushTrail:
-    """마우스가 지나간 자리에 빛나는 붓 점이 남았다가 사라진다."""
-    SPACING = 7
-    LIFE = 0.7
-    MAX_DOTS = 260
+    """마우스가 지나간 자리에 이어지는 무지갯빛 그라데이션 선. 오래된 쪽부터 가늘어지며 사라진다."""
+    SPACING = 5
+    LIFE = 0.6
+    MAX_POINTS = 120
+    WIDTH = 9.0
+    COLOR_STEPS = 12   # tools/gen_title_images.py 의 TRAIL_STEPS 와 같아야 한다
+    COLOR_SPEED = 0.35  # 점 하나마다 색이 넘어가는 정도 (작을수록 그라데이션이 길다)
 
     def __init__(self):
-        self.images = [image('common', f'brush_dot_{c}.png') for c in LIGHT_COLORS]
-        self.dots = []  # [x, y, age, color_index]
+        self.segments = [image('common', f'trail_segment_{i}.png') for i in range(self.COLOR_STEPS)]
+        self.caps = [image('common', f'trail_cap_{i}.png') for i in range(self.COLOR_STEPS)]
+        self.points = []  # [x, y, age, color_index]
         self.last = None
         self.hue = 0.0
+
+    def _add(self, x, y):
+        self.hue = (self.hue + self.COLOR_SPEED) % self.COLOR_STEPS
+        self.points.append([x, y, 0.0, int(self.hue)])
 
     def move(self, x, y):
         if self.last is None:
             self.last = (x, y)
+            self._add(x, y)
             return
         lx, ly = self.last
-        dist = math.hypot(x - lx, y - ly)
-        steps = int(dist / self.SPACING)
-        for i in range(1, steps + 1):
-            t = i / steps
-            self.hue = (self.hue + 0.12) % len(self.images)
-            self.dots.append([lx + (x - lx) * t, ly + (y - ly) * t, 0.0, int(self.hue)])
-        if steps:
+        if math.hypot(x - lx, y - ly) >= self.SPACING:
+            self._add(x, y)
             self.last = (x, y)
-        del self.dots[:-self.MAX_DOTS]
+            del self.points[:-self.MAX_POINTS]
 
     def update(self):
         dt = game_framework.frame_time
-        for d in self.dots:
-            d[2] += dt
-        self.dots = [d for d in self.dots if d[2] < self.LIFE]
+        for p in self.points:
+            p[2] += dt
+        self.points = [p for p in self.points if p[2] < self.LIFE]
+        if not self.points:
+            self.last = None
 
     def draw(self):
-        for x, y, age, c in self.dots:
-            k = 1 - age / self.LIFE
-            img = self.images[c]
-            img.opacify(min(1.0, 0.3 + k))
-            s = 8 + 18 * k
-            img.draw(x, y, s, s)
-        for img in self.images:
+        for (x0, y0, a0, _), (x1, y1, a1, c) in zip(self.points, self.points[1:]):
+            k = 1 - (a0 + a1) / 2 / self.LIFE
+            if k <= 0:
+                continue
+            length = math.hypot(x1 - x0, y1 - y0)
+            angle = math.atan2(y1 - y0, x1 - x0)
+            thick = self.WIDTH * (0.25 + 0.75 * k)
+            alpha = min(1.0, 0.15 + k)
+            seg, cap = self.segments[c], self.caps[c]
+            # 선 이미지(64x24)의 가운데 띠가 굵기가 되도록 높이를 맞춘다
+            seg.opacify(alpha)
+            seg.composite_draw(angle, '', (x0 + x1) / 2, (y0 + y1) / 2, length + 2, thick * 2.4)
+            cap.opacify(alpha)
+            cap.draw(x1, y1, thick * 2.4, thick * 2.4)
+        for img in self.segments + self.caps:
             img.opacify(1)
 
 
