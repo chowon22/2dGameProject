@@ -3,7 +3,7 @@ import math
 import random
 
 import game_framework
-from assets import image
+from assets import image, folder
 
 LIGHT_COLORS = ('pearl', 'sky', 'lavender', 'gold', 'pink')       # 빛 입자·붓자국
 INK_COLORS = ('red', 'green', 'blue', 'yellow', 'cyan', 'magenta')  # 원소 색 잉크 방울
@@ -20,7 +20,7 @@ class Bubble:
             self.y = random.uniform(0, SCREEN_H)
 
     def reset(self):
-        self.image = image('title', f'bubble_{random.choice(self.COLORS)}.png')
+        self.image = image(folder('title'), f'bubble_{random.choice(self.COLORS)}.png')
         self.base_x = random.uniform(40, SCREEN_W - 40)
         self.y = random.uniform(-90, -30)
         self.size = random.uniform(24, 64)
@@ -57,7 +57,7 @@ class Mote:
             self.y = random.uniform(0, SCREEN_H)
 
     def reset(self):
-        self.image = image('title', f'mote_{random.choice(LIGHT_COLORS)}.png')
+        self.image = image(folder('title'), f'mote_{random.choice(LIGHT_COLORS)}.png')
         if random.random() < 0.45:
             self.base_x = random.gauss(SCREEN_W / 2, 120)  # 잉크통 빛기둥 근처
         else:
@@ -92,7 +92,7 @@ class Twinkle:
     """하늘에서 커졌다 작아지며 반짝이는 별."""
 
     def __init__(self, x=None, y=None, size=None, life=None, vx=0.0, vy=0.0):
-        self.image = image('title', 'sparkle.png')
+        self.image = image(folder('title'), 'sparkle.png')
         self.burst = x is not None  # 클릭으로 튄 반짝이는 한 번만 빛나고 사라진다
         self.respawn(x, y, size, life)
         self.vx, self.vy = vx, vy

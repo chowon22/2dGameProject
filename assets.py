@@ -3,10 +3,23 @@ import os
 
 from pico2d import load_image
 
+import settings
+
 ROOT = os.path.dirname(os.path.abspath(__file__))
 IMAGE_DIR = os.path.join(ROOT, 'image')
 
 _cache = {}
+
+# 그림체(테마)마다 이미지 폴더가 다르다. 파일 이름은 같다.
+THEME_FOLDERS = {
+    'doodle': {'title': 'title_doodle', 'settings': 'settings_doodle'},
+    'dreamy': {'title': 'title', 'settings': 'settings'},
+}
+
+
+def folder(name):
+    """folder('title') → 지금 고른 그림체의 타이틀 이미지 폴더."""
+    return THEME_FOLDERS[settings.get('title_theme')].get(name, name)
 
 
 def image(*parts):

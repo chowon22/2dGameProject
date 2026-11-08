@@ -11,8 +11,11 @@ DEFAULTS = {
     'bgm_volume': 0.7,   # 배경음 0~1 (사운드가 들어가면 사용)
     'sfx_volume': 0.8,   # 효과음 0~1
     'brush_trail': True,  # 마우스 붓자국 효과
-    'light_motes': True,  # 떠다니는 빛 입자 효과
+    'light_motes': True,  # 떠다니는 빛 입자·비눗방울 효과
+    'title_theme': 'doodle',  # 타이틀 그림체: 'doodle'(낙서체) / 'dreamy'(몽환)
 }
+
+THEMES = ('doodle', 'dreamy')
 
 _values = dict(DEFAULTS)
 
@@ -31,6 +34,8 @@ def load(path=None):
             _values[key] = saved[key]
     for key in ('bgm_volume', 'sfx_volume'):
         _values[key] = min(1.0, max(0.0, float(_values[key])))
+    if _values['title_theme'] not in THEMES:
+        _values['title_theme'] = DEFAULTS['title_theme']
 
 
 def save(path=None):

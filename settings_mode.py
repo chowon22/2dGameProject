@@ -11,7 +11,7 @@ from pico2d import (clear_canvas, update_canvas, get_events,
 import game_framework
 import settings
 import title_mode
-from assets import image
+from assets import image, folder
 from ui_button import Button
 
 CX, CY = 640, 360
@@ -38,14 +38,15 @@ def close():
 
 def init():
     global dim, panel, track, track_fill, knob, toggle_on, toggle_off, close_button, dragging, t
-    dim = image('settings', 'dim.png')
-    panel = image('settings', 'panel.png')
-    track = image('settings', 'slider_track.png')
-    track_fill = image('settings', 'slider_fill.png')
-    knob = image('settings', 'slider_knob.png')
-    toggle_on = image('settings', 'toggle_on.png')
-    toggle_off = image('settings', 'toggle_off.png')
-    close_button = Button(CX, CLOSE_Y, 'button_close.png', 'button_close_hover.png', close, folder='settings')
+    dim = image(folder('settings'), 'dim.png')
+    panel = image(folder('settings'), 'panel.png')
+    track = image(folder('settings'), 'slider_track.png')
+    track_fill = image(folder('settings'), 'slider_fill.png')
+    knob = image(folder('settings'), 'slider_knob.png')
+    toggle_on = image(folder('settings'), 'toggle_on.png')
+    toggle_off = image(folder('settings'), 'toggle_off.png')
+    close_button = Button(CX, CLOSE_Y, 'button_close.png', 'button_close_hover.png', close,
+                          folder=folder('settings'))
     dragging = None
     t = 0.0
 

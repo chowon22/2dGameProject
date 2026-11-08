@@ -4,18 +4,19 @@
 - 빛 입자가 떠오르고 별이 반짝인다. 마우스는 분필 깃펜이 되어 빛나는 붓자국을 남긴다.
 - 빈 곳을 클릭하면 원소 색 잉크 방울이 톡 튄다.
 - 시작하기(Enter/Space) → 준비 화면, 설정 → 설정 창, 끝내기(ESC) → 종료.
+- T: 그림체 바꾸기 (낙서체 ↔ 몽환)
 """
 import math
 
 from pico2d import (clear_canvas, update_canvas, get_events, get_canvas_height, hide_cursor, show_cursor,
                     SDL_QUIT, SDL_KEYDOWN, SDL_MOUSEMOTION, SDL_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT,
-                    SDLK_ESCAPE, SDLK_RETURN, SDLK_SPACE)
+                    SDLK_ESCAPE, SDLK_RETURN, SDLK_SPACE, SDLK_t)
 
 import game_framework
 import prepare_mode
 import settings
 import settings_mode
-from assets import image
+from assets import image, folder
 from title_effects import Bubble, Mote, Twinkle, BrushTrail, InkSplash, sparkle_burst
 from ui_button import Button
 
@@ -49,21 +50,39 @@ def open_settings():
 
 
 def init():
+    settings.load()
+    load_scene()
+    hide_cursor()
+
+
+def switch_theme():
+    """낙서체 ↔ 몽환 그림체를 바꾸고 저장한 뒤 장면을 다시 불러온다."""
+    themes = settings.THEMES
+    now = settings.get('title_theme')
+    settings.set('title_theme', themes[(themes.index(now) + 1) % len(themes)])
+    settings.save()
+    keep_mouse = mouse
+    load_scene()
+    move_mouse(keep_mouse)
+
+
+def load_scene():
     global background, logo, logo_glow, bottle, bottle_glow, light_pool, cursor
     global buttons, bubbles, motes, twinkles, splashes, trail, t, mouse
-    settings.load()
-    background = image('title', 'background.png')
-    logo = image('title', 'logo.png')
-    logo_glow = image('title', 'logo_glow.png')
-    bottle = image('title', 'ink_bottle.png')
-    bottle_glow = image('title', 'bottle_glow.png')
-    light_pool = image('title', 'light_pool.png')
+    title = folder('title')
+    background = image(title, 'background.png')
+    logo = image(title, 'logo.png')
+    logo_glow = image(title, 'logo_glow.png')
+    bottle = image(title, 'ink_bottle.png')
+    bottle_glow = image(title, 'bottle_glow.png')
+    light_pool = image(title, 'light_pool.png')
     cursor = image('common', 'cursor_pen.png')
 
     buttons = [
-        Button(CX - BUTTON_GAP, BUTTON_Y, 'button_start.png', 'button_start_hover.png', start_game, 0.0),
-        Button(CX, BUTTON_Y, 'button_settings.png', 'button_settings_hover.png', open_settings, 0.8),
-        Button(CX + BUTTON_GAP, BUTTON_Y, 'button_quit.png', 'button_quit_hover.png', game_framework.quit, 1.6),
+        Button(CX - BUTTON_GAP, BUTTON_Y, 'button_start.png', 'button_start_hover.png', start_game, 0.0, title),
+        Button(CX, BUTTON_Y, 'button_settings.png', 'button_settings_hover.png', open_settings, 0.8, title),
+        Button(CX + BUTTON_GAP, BUTTON_Y, 'button_quit.png', 'button_quit_hover.png', game_framework.quit, 1.6,
+               title),
     ]
     bubbles = [Bubble(start_anywhere=True) for _ in range(12)]
     motes = [Mote(start_anywhere=True) for _ in range(28)]
@@ -72,7 +91,6 @@ def init():
     trail = BrushTrail()
     t = 0.0
     mouse = (-100, -100)
-    hide_cursor()
 
 
 def finish():
@@ -112,6 +130,8 @@ def handle_events():
             elif event.key in (SDLK_RETURN, SDLK_SPACE):
                 start_game()
                 return
+            elif event.key == SDLK_t:
+                switch_theme()
         elif event.type == SDL_MOUSEMOTION:
             move_mouse(to_canvas(event))
             for b in buttons:
