@@ -6,10 +6,10 @@
 - 시작하기(Enter/Space) → 준비 화면, 설정 → 설정 창, 끝내기(ESC) → 종료.
 - T / Tab / F2: 그림체 바꾸기 (낙서체 → 몽환 → 스케치북 → 잉크 → 파스텔)
 - 잉크·파스텔 그림체는 흑백 세상에서 시작해 잉크통(모래시계)에서부터 수채 물감이 번져 색이 칠해진다
+- 되찾은 색 그림체는 로고 'Ink' 도 검정 잉크로 시작해, 물감이 닿으면 I·n·k 가 빨강·초록·파랑으로 물든다.
+  모래시계 목에서 검정 잉크 방울이 떨어져 아래 칸에서 색 방울로 튀고, 버튼·비눗방울은 다 물든 뒤에 나타난다
 """
 import math
-import os
-
 from pico2d import (clear_canvas, update_canvas, get_events, get_canvas_height, hide_cursor, show_cursor,
                     SDL_QUIT, SDL_KEYDOWN, SDL_MOUSEMOTION, SDL_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT,
                     SDLK_ESCAPE, SDLK_RETURN, SDLK_SPACE, SDLK_t, SDLK_TAB, SDLK_F2)
@@ -18,8 +18,8 @@ import game_framework
 import prepare_mode
 import settings
 import settings_mode
-from assets import image, folder, IMAGE_DIR
-from title_effects import Bubble, Mote, Twinkle, BrushTrail, InkSplash, sparkle_burst
+from assets import image, folder, exists
+from title_effects import Bubble, Mote, Twinkle, BrushTrail, InkSplash, InkDrip, sparkle_burst
 from ui_button import Button
 
 CX = 640
@@ -31,15 +31,21 @@ LAYOUTS = {
     # 처음 만든 파스텔 수채화: 검정 잉크 로고가 모래시계 위에, 쪽지 버튼이 커서 간격을 넓힌다
     'pastel': {'logo': (640, 560), 'bottle_y': 262, 'bottle_scale': 0.9,
                'button_gap': 300, 'button_y': 78},
+    # 되찾은 색: 파스텔과 같은 배치. letters = I·n·k 색 층의 (로고 중심 기준 x, y, 물들기 시작하는 진행도)
+    'restore': {'logo': (640, 560), 'bottle_y': 262, 'bottle_scale': 0.9, 'button_gap': 300, 'button_y': 78,
+                'letters': ((194, -12, 0.42), (262, -12, 0.50), (340, -12, 0.58)), 'late_ui': 0.8},
 }
+LETTER_FADE = 0.06  # 글자 하나가 다 물드는 데 걸리는 진행도
 DYE_START, DYE_TIME = 0.5, 6.0  # 물들이기: 시작 시각과 다 번지는 데 걸리는 시간(초)
 BUTTON_Y = 70
 BUTTON_GAP = 262
 INTRO = 1.6  # 로고가 내려앉는 시간(초)
 CURSOR_OFFSET = (26, 26)  # 깃펜 이미지 중심에서 펜촉 끝까지 거리
 
-background = logo = logo_glow = subtitle = bottle = bottle_glow = light_pool = cursor = theme_hint = None
+background = logo = logo_glow = subtitle = drip = bottle = bottle_glow = light_pool = cursor = theme_hint = None
 dye = []  # 물들이기 단계별 색 층 (있는 그림체만)
+logo_inks = []  # 로고 글자별 색 층 (되찾은 색 그림체만)
+letters_done = set()
 buttons = []
 bubbles = []
 motes = []
@@ -76,21 +82,26 @@ def switch_theme():
 
 
 def load_scene():
+    global logo_inks, letters_done, drip
     global background, logo, logo_glow, subtitle, bottle, bottle_glow, light_pool, cursor, theme_hint, dye
     global buttons, bubbles, motes, twinkles, splashes, trail, t, mouse
     title = folder('title')
     theme_hint = image('common', 'hint_theme.png')
     dye = []
-    while os.path.exists(os.path.join(IMAGE_DIR, title, f'dye_{len(dye)}.png')):
+    while exists(title, f'dye_{len(dye)}.png'):
         dye.append(image(title, f'dye_{len(dye)}.png'))
+    logo_inks = []
+    while exists(title, f'logo_ink_{len(logo_inks)}.png'):
+        logo_inks.append(image(title, f'logo_ink_{len(logo_inks)}.png'))
+    letters_done = set()
+    drip = InkDrip() if exists(title, 'drip_black.png') else None
     background = image(title, 'background.png')
     logo = image(title, 'logo.png')
     logo_glow = image(title, 'logo_glow.png')
     bottle = image(title, 'ink_bottle.png')
     bottle_glow = image(title, 'bottle_glow.png')
     light_pool = image(title, 'light_pool.png')
-    has_subtitle = os.path.exists(os.path.join(IMAGE_DIR, title, 'subtitle.png'))
-    subtitle = image(title, 'subtitle.png') if has_subtitle else None
+    subtitle = image(title, 'subtitle.png') if exists(title, 'subtitle.png') else None
     cursor = image('common', 'cursor_pen.png')
 
     lay = layout()
@@ -155,7 +166,7 @@ def handle_events():
                 b.mouse_move(*mouse)
         elif event.type == SDL_MOUSEBUTTONDOWN and event.button == SDL_BUTTON_LEFT:
             mx, my = to_canvas(event)
-            if any(b.click(mx, my) for b in buttons):
+            if ui_alpha() > 0.3 and any(b.click(mx, my) for b in buttons):
                 return  # 화면이 바뀌었거나 종료됨
             splashes.append(InkSplash(mx, my))
             twinkles.extend(sparkle_burst(mx, my))
@@ -171,6 +182,9 @@ def update_ambient():
     for obj in twinkles + splashes:
         obj.update()
     trail.update()
+    if drip:
+        drip.update()
+    color_letters()
     splashes = [s for s in splashes if not s.done][-20:]
     twinkles = [s for s in twinkles if not s.done]
 
@@ -192,12 +206,35 @@ def draw_with_alpha(img, alpha, *args):
     img.opacify(1)
 
 
+def dye_progress():
+    """물들이기 진행도 0~1."""
+    return max(0.0, min(1.0, (t - DYE_START) / DYE_TIME))
+
+
+def color_letters():
+    """물감이 로고 글자에 닿는 순간 그 자리에 반짝이를 터뜨린다 (한 글자에 한 번)."""
+    lay = layout()
+    p = dye_progress()
+    for i, (dx, dy, start) in enumerate(lay.get('letters', ())[:len(logo_inks)]):
+        if i not in letters_done and p >= start:
+            letters_done.add(i)
+            twinkles.extend(sparkle_burst(lay['logo'][0] + dx, lay['logo'][1] + dy, count=8))
+
+
+def ui_alpha():
+    """버튼·비눗방울이 나타난 정도. late_ui 그림체는 다 물든 뒤에야 나타난다."""
+    late = layout().get('late_ui')
+    if late is None:
+        return ease_out((t - INTRO * 0.6) / INTRO)
+    return ease_out((t - DYE_START - DYE_TIME * late) / INTRO)
+
+
 def draw_dye():
     """색 층을 단계별로 겹쳐 그려 잉크통에서부터 색이 번져 나가게 한다.
     k 번째 층을 다 그리고 k+1 번째 층을 비율만큼 겹치면 경계가 부드럽게 넓어진다."""
     if not dye:
         return
-    p = max(0.0, min(1.0, (t - DYE_START) / DYE_TIME)) * len(dye)
+    p = dye_progress() * len(dye)
     k = int(p)
     if k > 0:
         dye[min(k, len(dye)) - 1].draw(CX, 360, 1280, 720)
@@ -228,12 +265,15 @@ def draw_scene():
     pool_y = bottle_y - bottle.h * sc / 2 - 32 * sc
     draw_with_alpha(light_pool, 0.7 * pool_k, CX, pool_y, light_pool.w * pool_k * sc, light_pool.h * sc)
     bottle.composite_draw(math.sin(t * 0.8) * 0.035, '', CX, bottle_y + float_y, bottle.w * sc, bottle.h * sc)
+    if drip:
+        drip.draw(CX, bottle_y + float_y, sc)
 
-    if settings.get('light_motes'):
+    ui_k = ui_alpha()
+    if settings.get('light_motes') and ui_k > 0:
         for b in bubbles:
-            b.draw()
+            b.draw(ui_k)
         for m in motes:
-            m.draw()
+            m.draw(ui_k)
     for s in splashes:
         s.draw()
 
@@ -242,10 +282,15 @@ def draw_scene():
     logo_y = logo_base_y + (1 - k) * 40 + math.sin(t * 1.1) * 4
     draw_with_alpha(logo_glow, k * (0.55 + 0.25 * math.sin(t * 1.5)), logo_x, logo_y)
     draw_with_alpha(logo, k, logo_x, logo_y)
+    p = dye_progress()
+    for img, (_, _, start) in zip(logo_inks, lay.get('letters', ())):
+        a = max(0.0, min(1.0, (p - start) / LETTER_FADE))
+        if a > 0:
+            draw_with_alpha(img, k * a, logo_x, logo_y)
     if subtitle:
         draw_with_alpha(subtitle, ease_out((t - INTRO * 0.6) / INTRO), CX, lay['subtitle_y'])
 
-    btn_k = ease_out((t - INTRO * 0.6) / INTRO)
+    btn_k = ui_k
     if btn_k > 0:
         for b in buttons:
             b.normal.opacify(btn_k)
