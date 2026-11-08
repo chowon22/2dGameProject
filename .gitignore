@@ -2,3 +2,6 @@ __pycache__/
 *.pyc
 .vscode/
 .idea/
+
+# 개인 설정 값
+data/settings.json
