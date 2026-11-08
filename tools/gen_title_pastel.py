@@ -407,7 +407,7 @@ def color_background():
     return Image.open(io.BytesIO(raw)).convert('RGB')
 
 
-def gray_background(col):
+def gray_background(col, night=False):
     """색을 빼앗긴 세상: 물체마다 다른 회색으로 칠한 흑백 동화 그림.
     색마다 다른 회색으로 바꾸면 보랏빛 펜 선은 저절로 짙은 먹색이 되어 컬러 그림과 굵기가 같다.
     어두운 곳(동굴 안)엔 연필 빗금을 더한다."""
@@ -435,8 +435,15 @@ def gray_background(col):
     # 물체마다 다른 회색: 파스텔 색은 밝기가 비슷해 그냥 흑백으로 바꾸면 한 가지 회색이 된다.
     # 파랑을 빼고 빨강·초록으로 밝기를 매긴 뒤 대비를 키워, 하늘·라벤더는 짙게 · 분홍·레몬은 옅게 갈라 놓는다.
     rgb = np.asarray(col, np.float32)
-    g = rgb[..., 0] * 0.62 + rgb[..., 1] * 0.38
-    g = 250 - (250 - g) * 1.6
+    if night:
+        # 밤: 어두운 색끼리도 갈라지게 밝기를 끌어올린다 (남보라 하늘·나무가 다 검게 뭉치지 않게)
+        g = rgb[..., 0] * 0.34 + rgb[..., 1] * 0.36 + rgb[..., 2] * 0.30
+        g = 58 + (g - 40) * 1.35
+        hatch = hatch * 0  # 밤엔 다 어두워서 빗금이 화면을 덮으므로 뺀다
+        wash = wash * 0
+    else:
+        g = rgb[..., 0] * 0.62 + rgb[..., 1] * 0.38
+        g = 250 - (250 - g) * 1.6
     g = np.asarray(Image.fromarray(np.clip(g, 0, 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(0.4)),
                    np.float32)
     grain = np.asarray(paper(w, h, seed=97).convert('L'), np.float32) / 244  # 도화지 결

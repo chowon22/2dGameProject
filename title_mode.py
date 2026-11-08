@@ -35,6 +35,7 @@ LAYOUTS = {
     'restore': {'logo': (640, 560), 'bottle_y': 262, 'bottle_scale': 0.9, 'button_gap': 300, 'button_y': 78,
                 'letters': ((194, -12, 0.42), (262, -12, 0.50), (340, -12, 0.58)), 'late_ui': 0.8},
 }
+LAYOUTS['restore_night'] = LAYOUTS['restore']  # 밤 버전은 배경만 다르다
 LETTER_FADE = 0.06  # 글자 하나가 다 물드는 데 걸리는 진행도
 DYE_START, DYE_TIME = 0.5, 6.0  # 물들이기: 시작 시각과 다 번지는 데 걸리는 시간(초)
 BUTTON_Y = 70

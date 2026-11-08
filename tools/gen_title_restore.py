@@ -5,10 +5,12 @@
 - 모래시계: 가운데를 똑 뗄 수 있는 두 병. 위는 검정 잉크통, 아래는 컬러 잉크통 (PRD 2.1 두 잉크통).
   목의 가는 이음 고리에서 갈라진다. 실행 중에 검정 잉크 방울(drip_black)이 떨어져
   아래 칸에서 색 방울(drip_splash_*)로 튄다
-- 나머지(배경·물들이기·버튼·비눗방울 …)는 파스텔 그림체 이미지를 그대로 쓴다 (assets 의 FALLBACK)
+- 배경: 처음 파스텔 배경을 다시 그려(gen_title_bg) 낮은 달 대신 해, 밤 버전(title_restore_night)은 달과 별.
+  각각 흑백 배경 + 물들이기 층(dye_*)을 만든다
+- 나머지(버튼·비눗방울 …)는 파스텔 그림체 이미지를 그대로 쓴다 (assets 의 FALLBACK)
 
 실행:  python tools/gen_title_restore.py
-결과:  image/title_restore/*.png
+결과:  image/title_restore/*.png, image/title_restore_night/*.png
 """
 import math
 import os
@@ -19,20 +21,29 @@ from PIL import Image, ImageChops, ImageFilter
 sys.path.insert(0, os.path.dirname(__file__))
 from sketch import Sheet, bezier, INK, PLUM, PASTEL, WATERCOLOR  # noqa: E402
 import gen_title_pastel as pastel  # noqa: E402
+import gen_title_bg  # noqa: E402
 from gen_title_pastel import lay, sparkle_stroke, logo_masks, LOGO_SIZE, WHITE  # noqa: E402
 
 ROOT = pastel.ROOT
 OUT = os.path.join(ROOT, 'image', 'title_restore')
+NIGHT_OUT = os.path.join(ROOT, 'image', 'title_restore_night')  # 밤 버전: 배경만 다르고 나머지는 낮 것을 쓴다
 # I·n·k 가 되찾는 색 = 모래시계 아래 칸에 쌓인 원소 색
 TINTS = (WATERCOLOR['red'], WATERCOLOR['green'], WATERCOLOR['blue'])
 SPLASH = {'red': WATERCOLOR['red'], 'green': WATERCOLOR['green'], 'blue': WATERCOLOR['blue']}
 DARK_LINE = (58, 44, 76)  # 'Ink' 바탕 테두리: 보랏빛 펜보다 한 톤 짙게
 
 
-def save(img, name):
-    os.makedirs(OUT, exist_ok=True)
-    img.save(os.path.join(OUT, name))
-    print('saved', name, img.size)
+def save(img, name, out=OUT):
+    os.makedirs(out, exist_ok=True)
+    img.save(os.path.join(out, name))
+    print('saved', os.path.basename(out) + '/' + name, img.size)
+
+
+def save_world(col, out, night=False):
+    """컬러 배경 → 흑백 배경 + 물들이기 층."""
+    save(pastel.gray_background(col, night), 'background.png', out)
+    for i, f in enumerate(pastel.dye_frames(col)):
+        save(f, f'dye_{i}.png', out)
 
 
 def logo_layers():
@@ -191,6 +202,8 @@ def splash(color, seed):
 
 
 def main():
+    save_world(gen_title_bg.background('sun'), OUT)                    # 낮: 달 대신 해
+    save_world(gen_title_bg.background('moon', night=True), NIGHT_OUT, night=True)  # 밤: 달과 별
     (base, *letters), centers = logo_layers()
     save(base, 'logo.png')
     for i, im in enumerate(letters):

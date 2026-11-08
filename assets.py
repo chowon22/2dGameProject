@@ -18,11 +18,12 @@ THEME_FOLDERS = {
     'ink': {'title': 'title_ink', 'settings': 'settings_ink'},
     'pastel': {'title': 'title_pastel', 'settings': 'settings_pastel'},
     'restore': {'title': 'title_restore', 'settings': 'settings_pastel'},
+    'restore_night': {'title': 'title_restore_night', 'settings': 'settings_pastel'},
 }
 
 
 # 폴더에 없는 파일은 바탕이 되는 그림체 폴더에서 찾는다 (같은 그림을 복사해 두지 않으려고)
-FALLBACK = {'title_restore': 'title_pastel'}
+FALLBACK = {'title_restore_night': 'title_restore', 'title_restore': 'title_pastel'}
 
 
 def _resolve(parts):
