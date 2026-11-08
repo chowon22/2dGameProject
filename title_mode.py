@@ -1,9 +1,9 @@
 """타이틀 화면.
 
-- 파스텔 수채화 배경 위로 로고가 내려앉고, 모래시계 잉크통이 둥실 떠 있다.
-- 비눗방울이 떠오르고 별이 반짝인다. 마우스는 깃펜이 되어 파스텔 붓자국을 남긴다.
-- 빈 곳을 클릭하면 잉크 방울이 톡 튄다.
-- 시작하기(Enter/Space) → 준비 화면, 끝내기(ESC) → 종료.
+- 깊은 밤 하늘 아래, 빛을 내뿜는 모래시계 잉크통이 둥실 떠 있고 로고가 내려앉는다.
+- 빛 입자가 떠오르고 별이 반짝인다. 마우스는 분필 깃펜이 되어 빛나는 붓자국을 남긴다.
+- 빈 곳을 클릭하면 원소 색 잉크 방울이 톡 튄다.
+- 시작하기(Enter/Space) → 준비 화면, 설정 → 설정 창, 끝내기(ESC) → 종료.
 """
 import math
 
@@ -13,22 +13,24 @@ from pico2d import (clear_canvas, update_canvas, get_events, get_canvas_height, 
 
 import game_framework
 import prepare_mode
+import settings
+import settings_mode
 from assets import image
-from title_effects import Bubble, Twinkle, BrushTrail, InkSplash, sparkle_burst
+from title_effects import Mote, Twinkle, BrushTrail, InkSplash, sparkle_burst
 from ui_button import Button
 
 CX = 640
-LOGO_Y = 585
-SUBTITLE_Y = 472
-BOTTLE_Y = 292
-BUTTON_Y = 78
-INTRO = 1.4  # 로고가 내려앉는 시간(초)
+LOGO_Y = 580
+BOTTLE_Y = 320
+POOL_Y = 118
+BUTTON_Y = 70
+BUTTON_GAP = 300
+INTRO = 1.6  # 로고가 내려앉는 시간(초)
 CURSOR_OFFSET = (26, 26)  # 깃펜 이미지 중심에서 펜촉 끝까지 거리
 
-background = logo = logo_glow = subtitle = None
-bottle = bottle_glow = bottle_shadow = cursor = None
+background = logo = logo_glow = bottle = bottle_glow = light_pool = cursor = None
 buttons = []
-bubbles = []
+motes = []
 twinkles = []
 splashes = []
 trail = None
@@ -40,24 +42,29 @@ def start_game():
     game_framework.change_mode(prepare_mode)
 
 
+def open_settings():
+    game_framework.push_mode(settings_mode)
+
+
 def init():
-    global background, logo, logo_glow, subtitle, bottle, bottle_glow, bottle_shadow, cursor
-    global buttons, bubbles, twinkles, splashes, trail, t, mouse
+    global background, logo, logo_glow, bottle, bottle_glow, light_pool, cursor
+    global buttons, motes, twinkles, splashes, trail, t, mouse
+    settings.load()
     background = image('title', 'background.png')
     logo = image('title', 'logo.png')
     logo_glow = image('title', 'logo_glow.png')
-    subtitle = image('title', 'subtitle.png')
     bottle = image('title', 'ink_bottle.png')
     bottle_glow = image('title', 'bottle_glow.png')
-    bottle_shadow = image('title', 'bottle_shadow.png')
+    light_pool = image('title', 'light_pool.png')
     cursor = image('common', 'cursor_pen.png')
 
     buttons = [
-        Button(CX - 150, BUTTON_Y, 'button_start.png', 'button_start_hover.png', start_game, 0.0),
-        Button(CX + 150, BUTTON_Y, 'button_quit.png', 'button_quit_hover.png', game_framework.quit, 1.3),
+        Button(CX - BUTTON_GAP, BUTTON_Y, 'button_start.png', 'button_start_hover.png', start_game, 0.0),
+        Button(CX, BUTTON_Y, 'button_settings.png', 'button_settings_hover.png', open_settings, 0.8),
+        Button(CX + BUTTON_GAP, BUTTON_Y, 'button_quit.png', 'button_quit_hover.png', game_framework.quit, 1.6),
     ]
-    bubbles = [Bubble(start_anywhere=True) for _ in range(14)]
-    twinkles = [Twinkle() for _ in range(16)]
+    motes = [Mote(start_anywhere=True) for _ in range(36)]
+    twinkles = [Twinkle() for _ in range(14)]
     splashes = []
     trail = BrushTrail()
     t = 0.0
@@ -70,15 +77,29 @@ def finish():
 
 
 def pause():
-    pass
+    for b in buttons:
+        b.hovered = False
 
 
 def resume():
     pass
 
 
-def handle_events():
+def to_canvas(event):
+    return event.x, get_canvas_height() - 1 - event.y
+
+
+def move_mouse(pos):
+    """설정 창이 떠 있을 때도 커서와 붓자국은 여기서 처리한다."""
     global mouse
+    mouse = pos
+    if settings.get('brush_trail'):
+        trail.move(*pos)
+    else:
+        trail.last = None
+
+
+def handle_events():
     for event in get_events():
         if event.type == SDL_QUIT:
             game_framework.quit()
@@ -89,26 +110,35 @@ def handle_events():
                 start_game()
                 return
         elif event.type == SDL_MOUSEMOTION:
-            mouse = (event.x, get_canvas_height() - 1 - event.y)
-            trail.move(*mouse)
+            move_mouse(to_canvas(event))
             for b in buttons:
                 b.mouse_move(*mouse)
         elif event.type == SDL_MOUSEBUTTONDOWN and event.button == SDL_BUTTON_LEFT:
-            mx, my = event.x, get_canvas_height() - 1 - event.y
+            mx, my = to_canvas(event)
             if any(b.click(mx, my) for b in buttons):
                 return  # 화면이 바뀌었거나 종료됨
             splashes.append(InkSplash(mx, my))
             twinkles.extend(sparkle_burst(mx, my))
 
 
-def update():
+def update_ambient():
+    """배경 움직임만 갱신 (설정 창 뒤에서도 계속 흐르게)."""
     global t, splashes, twinkles
     t += game_framework.frame_time
-    for obj in bubbles + twinkles + splashes + buttons:
+    if settings.get('light_motes'):
+        for m in motes:
+            m.update()
+    for obj in twinkles + splashes:
         obj.update()
     trail.update()
     splashes = [s for s in splashes if not s.done][-20:]
     twinkles = [s for s in twinkles if not s.done]
+
+
+def update():
+    update_ambient()
+    for b in buttons:
+        b.update()
 
 
 def ease_out(x):
@@ -116,44 +146,39 @@ def ease_out(x):
     return 1 - (1 - x) ** 3
 
 
-def draw():
-    clear_canvas()
+def draw_with_alpha(img, alpha, *args):
+    img.opacify(alpha)
+    img.draw(*args)
+    img.opacify(1)
+
+
+def draw_scene():
+    """커서를 뺀 타이틀 화면 전체."""
     background.draw(CX, 360)
 
-    for s in splashes:
-        s.draw()
     for tw in twinkles:
         tw.draw()
 
-    # 모래시계 잉크통: 둥실 떠 있고 뒤에서 빛이 숨 쉰다
-    float_y = math.sin(t * 1.4) * 9
-    bottle_glow.opacify(0.55 + 0.3 * math.sin(t * 1.8))
-    bottle_glow.draw(CX, BOTTLE_Y + float_y)
-    bottle_glow.opacify(1)
-    shadow_k = 1 - float_y / 40
-    bottle_shadow.opacify(0.6 * shadow_k)
-    bottle_shadow.draw(CX, BOTTLE_Y - 172, bottle_shadow.w * shadow_k, bottle_shadow.h)
-    bottle_shadow.opacify(1)
-    bottle.composite_draw(math.sin(t * 0.9) * 0.04, '', CX, BOTTLE_Y + float_y, bottle.w, bottle.h)
+    # 잉크통: 둥실 떠 있고 뒤에서 빛이 숨 쉰다
+    float_y = math.sin(t * 1.3) * 10
+    draw_with_alpha(bottle_glow, 0.6 + 0.3 * math.sin(t * 1.7), CX, BOTTLE_Y + float_y)
+    pool_k = 1 - float_y / 50
+    draw_with_alpha(light_pool, 0.7 * pool_k, CX, POOL_Y, light_pool.w * pool_k, light_pool.h)
+    bottle.composite_draw(math.sin(t * 0.8) * 0.035, '', CX, BOTTLE_Y + float_y, bottle.w, bottle.h)
 
-    for b in bubbles:
-        b.draw()
+    if settings.get('light_motes'):
+        for m in motes:
+            m.draw()
+    for s in splashes:
+        s.draw()
 
     # 로고: 처음에 위에서 내려앉으며 나타난다
     k = ease_out(t / INTRO)
     logo_y = LOGO_Y + (1 - k) * 40 + math.sin(t * 1.1) * 4
-    logo_glow.opacify(k * (0.6 + 0.25 * math.sin(t * 1.5)))
-    logo_glow.draw(CX, logo_y)
-    logo_glow.opacify(1)
-    logo.opacify(k)
-    logo.draw(CX, logo_y)
-    logo.opacify(1)
-    sub_k = ease_out((t - INTRO * 0.6) / INTRO)
-    subtitle.opacify(sub_k)
-    subtitle.draw(CX, SUBTITLE_Y)
-    subtitle.opacify(1)
+    draw_with_alpha(logo_glow, k * (0.55 + 0.25 * math.sin(t * 1.5)), CX, logo_y)
+    draw_with_alpha(logo, k, CX, logo_y)
 
-    btn_k = ease_out((t - INTRO * 0.9) / INTRO)
+    btn_k = ease_out((t - INTRO * 0.6) / INTRO)
     if btn_k > 0:
         for b in buttons:
             b.normal.opacify(btn_k)
@@ -163,5 +188,14 @@ def draw():
             b.hover_image.opacify(1)
 
     trail.draw()
+
+
+def draw_cursor():
     cursor.draw(mouse[0] + CURSOR_OFFSET[0], mouse[1] + CURSOR_OFFSET[1])
+
+
+def draw():
+    clear_canvas()
+    draw_scene()
+    draw_cursor()
     update_canvas()
