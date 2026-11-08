@@ -12,10 +12,10 @@ DEFAULTS = {
     'sfx_volume': 0.8,   # 효과음 0~1
     'brush_trail': True,  # 마우스 붓자국 효과
     'light_motes': True,  # 떠다니는 빛 입자·비눗방울 효과
-    'title_theme': 'doodle',  # 타이틀 그림체: 'doodle'(낙서체) / 'dreamy'(몽환)
+    'title_theme': 'doodle',  # 타이틀 그림체: 'doodle'(낙서체) / 'dreamy'(몽환) / 'sketchbook'(스케치북)
 }
 
-THEMES = ('doodle', 'dreamy')
+THEMES = ('doodle', 'dreamy', 'sketchbook')
 
 _values = dict(DEFAULTS)
 

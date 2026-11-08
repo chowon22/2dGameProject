@@ -4,7 +4,7 @@
 - 빛 입자가 떠오르고 별이 반짝인다. 마우스는 분필 깃펜이 되어 빛나는 붓자국을 남긴다.
 - 빈 곳을 클릭하면 원소 색 잉크 방울이 톡 튄다.
 - 시작하기(Enter/Space) → 준비 화면, 설정 → 설정 창, 끝내기(ESC) → 종료.
-- T: 그림체 바꾸기 (낙서체 ↔ 몽환)
+- T: 그림체 바꾸기 (낙서체 → 몽환 → 스케치북)
 """
 import math
 
@@ -56,7 +56,7 @@ def init():
 
 
 def switch_theme():
-    """낙서체 ↔ 몽환 그림체를 바꾸고 저장한 뒤 장면을 다시 불러온다."""
+    """다음 그림체로 바꾸고 저장한 뒤 장면을 다시 불러온다."""
     themes = settings.THEMES
     now = settings.get('title_theme')
     settings.set('title_theme', themes[(themes.index(now) + 1) % len(themes)])

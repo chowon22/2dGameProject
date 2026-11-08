@@ -14,6 +14,7 @@ _cache = {}
 THEME_FOLDERS = {
     'doodle': {'title': 'title_doodle', 'settings': 'settings_doodle'},
     'dreamy': {'title': 'title', 'settings': 'settings'},
+    'sketchbook': {'title': 'title_sketch', 'settings': 'settings_sketch'},
 }
 
 
