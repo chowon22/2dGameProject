@@ -15,6 +15,7 @@ THEME_FOLDERS = {
     'doodle': {'title': 'title_doodle', 'settings': 'settings_doodle'},
     'dreamy': {'title': 'title', 'settings': 'settings'},
     'sketchbook': {'title': 'title_sketch', 'settings': 'settings_sketch'},
+    'ink': {'title': 'title_ink', 'settings': 'settings_ink'},
 }
 
 

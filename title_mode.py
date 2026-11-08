@@ -4,9 +4,11 @@
 - 빛 입자가 떠오르고 별이 반짝인다. 마우스는 분필 깃펜이 되어 빛나는 붓자국을 남긴다.
 - 빈 곳을 클릭하면 원소 색 잉크 방울이 톡 튄다.
 - 시작하기(Enter/Space) → 준비 화면, 설정 → 설정 창, 끝내기(ESC) → 종료.
-- T / Tab / F2: 그림체 바꾸기 (낙서체 → 몽환 → 스케치북)
+- T / Tab / F2: 그림체 바꾸기 (낙서체 → 몽환 → 스케치북 → 수묵)
+- 수묵 그림체는 흑백 수묵화에서 시작해 잉크통에서부터 색이 번져 세상을 물들인다
 """
 import math
+import os
 
 from pico2d import (clear_canvas, update_canvas, get_events, get_canvas_height, hide_cursor, show_cursor,
                     SDL_QUIT, SDL_KEYDOWN, SDL_MOUSEMOTION, SDL_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT,
@@ -16,7 +18,7 @@ import game_framework
 import prepare_mode
 import settings
 import settings_mode
-from assets import image, folder
+from assets import image, folder, IMAGE_DIR
 from title_effects import Bubble, Mote, Twinkle, BrushTrail, InkSplash, sparkle_burst
 from ui_button import Button
 
@@ -25,13 +27,16 @@ CX = 640
 LAYOUTS = {
     'default': {'logo': (330, 562), 'bottle_y': 320, 'bottle_scale': 1.0},
     'sketchbook': {'logo': (640, 584), 'bottle_y': 284, 'bottle_scale': 0.84},  # 로고가 가운데 위
+    'ink': {'logo': (640, 590), 'bottle_y': 284, 'bottle_scale': 0.84},
 }
+DYE_START, DYE_TIME = 0.5, 6.0  # 물들이기: 시작 시각과 다 번지는 데 걸리는 시간(초)
 BUTTON_Y = 70
 BUTTON_GAP = 262
 INTRO = 1.6  # 로고가 내려앉는 시간(초)
 CURSOR_OFFSET = (26, 26)  # 깃펜 이미지 중심에서 펜촉 끝까지 거리
 
 background = logo = logo_glow = bottle = bottle_glow = light_pool = cursor = theme_hint = None
+dye = []  # 물들이기 단계별 색 층 (있는 그림체만)
 buttons = []
 bubbles = []
 motes = []
@@ -68,10 +73,13 @@ def switch_theme():
 
 
 def load_scene():
-    global background, logo, logo_glow, bottle, bottle_glow, light_pool, cursor, theme_hint
+    global background, logo, logo_glow, bottle, bottle_glow, light_pool, cursor, theme_hint, dye
     global buttons, bubbles, motes, twinkles, splashes, trail, t, mouse
     title = folder('title')
     theme_hint = image('common', 'hint_theme.png')
+    dye = []
+    while os.path.exists(os.path.join(IMAGE_DIR, title, f'dye_{len(dye)}.png')):
+        dye.append(image(title, f'dye_{len(dye)}.png'))
     background = image(title, 'background.png')
     logo = image(title, 'logo.png')
     logo_glow = image(title, 'logo_glow.png')
@@ -177,6 +185,19 @@ def draw_with_alpha(img, alpha, *args):
     img.opacify(1)
 
 
+def draw_dye():
+    """색 층을 단계별로 겹쳐 그려 잉크통에서부터 색이 번져 나가게 한다.
+    k 번째 층을 다 그리고 k+1 번째 층을 비율만큼 겹치면 경계가 부드럽게 넓어진다."""
+    if not dye:
+        return
+    p = max(0.0, min(1.0, (t - DYE_START) / DYE_TIME)) * len(dye)
+    k = int(p)
+    if k > 0:
+        dye[min(k, len(dye)) - 1].draw(CX, 360, 1280, 720)
+    if k < len(dye):
+        draw_with_alpha(dye[k], p - k, CX, 360, 1280, 720)
+
+
 def layout():
     return LAYOUTS.get(settings.get('title_theme'), LAYOUTS['default'])
 
@@ -187,6 +208,7 @@ def draw_scene():
     logo_x, logo_base_y = lay['logo']
     bottle_y, sc = lay['bottle_y'], lay['bottle_scale']
     background.draw(CX, 360)
+    draw_dye()
 
     for tw in twinkles:
         tw.draw()
