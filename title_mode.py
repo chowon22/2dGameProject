@@ -5,7 +5,7 @@
 - 빈 곳을 클릭하면 원소 색 잉크 방울이 톡 튄다.
 - 시작하기(Enter/Space) → 준비 화면, 설정 → 설정 창, 끝내기(ESC) → 종료.
 - T / Tab / F2: 그림체 바꾸기 (낙서체 → 몽환 → 스케치북 → 잉크 → 파스텔)
-- 잉크 그림체는 펜으로 그린 흑백 동화 세상에서 시작해 잉크통에서부터 수채 물감이 번져 색이 칠해진다
+- 잉크·파스텔 그림체는 흑백 세상에서 시작해 잉크통(모래시계)에서부터 수채 물감이 번져 색이 칠해진다
 """
 import math
 import os
@@ -210,7 +210,7 @@ def layout():
 
 
 def draw_scene():
-    """커서를 뺀 타이틀 화면 전체."""
+    """커서·붓자국을 뺀 타이틀 화면 전체 (설정 창이 그 위에 겹친다)."""
     lay = layout()
     logo_x, logo_base_y = lay['logo']
     bottle_y, sc = lay['bottle_y'], lay['bottle_scale']
@@ -254,8 +254,6 @@ def draw_scene():
             b.normal.opacify(1)
             b.hover_image.opacify(1)
 
-    trail.draw()
-
 
 def draw_hint():
     """오른쪽 아래 'T 그림체 바꾸기' 안내."""
@@ -263,6 +261,8 @@ def draw_hint():
 
 
 def draw_cursor():
+    """붓자국과 깃펜 커서. 설정 창보다 위에 그려야 창에 묻히지 않는다."""
+    trail.draw()
     cursor.draw(mouse[0] + CURSOR_OFFSET[0], mouse[1] + CURSOR_OFFSET[1])
 
 
