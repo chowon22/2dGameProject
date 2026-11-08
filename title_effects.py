@@ -1,16 +1,17 @@
-"""타이틀 화면의 몽환적인 움직임: 비눗방울, 반짝이, 붓자국, 잉크 방울."""
+"""타이틀 화면의 몽환적인 움직임: 빛 입자, 반짝이, 붓자국, 잉크 방울."""
 import math
 import random
 
 import game_framework
 from assets import image
 
-PASTELS = ('pink', 'peach', 'lemon', 'mint', 'sky', 'lavender')
+LIGHT_COLORS = ('white', 'cyan', 'lavender', 'gold', 'pink')       # 빛 입자·붓자국
+INK_COLORS = ('red', 'green', 'blue', 'yellow', 'cyan', 'magenta')  # 원소 색 잉크 방울
 SCREEN_W, SCREEN_H = 1280, 720
 
 
-class Bubble:
-    """아래에서 위로 흔들리며 떠오르는 파스텔 비눗방울."""
+class Mote:
+    """반딧불처럼 깜빡이며 천천히 떠오르는 빛 입자. 잉크통 쪽에서 더 많이 생긴다."""
 
     def __init__(self, start_anywhere=False):
         self.reset()
@@ -18,32 +19,34 @@ class Bubble:
             self.y = random.uniform(0, SCREEN_H)
 
     def reset(self):
-        self.image = image('title', f'bubble_{random.choice(PASTELS)}.png')
-        self.base_x = random.uniform(40, SCREEN_W - 40)
-        self.y = random.uniform(-80, -20)
-        self.size = random.uniform(22, 58)
-        self.speed = random.uniform(22, 48)
-        self.sway = random.uniform(10, 30)
+        self.image = image('title', f'mote_{random.choice(LIGHT_COLORS)}.png')
+        if random.random() < 0.45:
+            self.base_x = random.gauss(SCREEN_W / 2, 120)  # 잉크통 빛기둥 근처
+        else:
+            self.base_x = random.uniform(20, SCREEN_W - 20)
+        self.y = random.uniform(-40, 120)
+        self.size = random.uniform(10, 30)
+        self.speed = random.uniform(14, 40)
+        self.sway = random.uniform(8, 36)
         self.phase = random.uniform(0, 2 * math.pi)
+        self.blink = random.uniform(1.2, 3.0)
         self.t = 0.0
 
     @property
     def x(self):
-        return self.base_x + math.sin(self.t * 0.9 + self.phase) * self.sway
+        return self.base_x + math.sin(self.t * 0.7 + self.phase) * self.sway
 
     def update(self):
         dt = game_framework.frame_time
         self.t += dt
         self.y += self.speed * dt
-        if self.y > SCREEN_H + 60:
+        if self.y > SCREEN_H + 40:
             self.reset()
 
     def draw(self):
-        # 위로 올라갈수록 옅어진다
-        fade = max(0.0, min(1.0, (SCREEN_H + 40 - self.y) / 260))
-        self.image.opacify((0.7 + 0.25 * math.sin(self.t * 2 + self.phase)) * fade)
-        wobble = 1 + 0.05 * math.sin(self.t * 3 + self.phase)
-        self.image.draw(self.x, self.y, self.size * wobble, self.size / wobble)
+        fade = max(0.0, min(1.0, (SCREEN_H + 20 - self.y) / 300, self.t / 1.0))
+        self.image.opacify((0.55 + 0.45 * math.sin(self.t * self.blink + self.phase)) * fade)
+        self.image.draw(self.x, self.y, self.size, self.size)
         self.image.opacify(1)
 
 
@@ -60,7 +63,7 @@ class Twinkle:
 
     def respawn(self, x=None, y=None, size=None, life=None):
         self.x = x if x is not None else random.uniform(30, SCREEN_W - 30)
-        self.y = y if y is not None else random.uniform(SCREEN_H * 0.45, SCREEN_H - 20)
+        self.y = y if y is not None else random.uniform(SCREEN_H * 0.4, SCREEN_H - 20)
         self.size = size or random.uniform(14, 30)
         self.life = life or random.uniform(1.6, 3.2)
         self.t = 0.0
@@ -90,13 +93,13 @@ class Twinkle:
 
 
 class BrushTrail:
-    """마우스가 지나간 자리에 파스텔 무지개 붓 점이 남았다가 사라진다."""
+    """마우스가 지나간 자리에 빛나는 붓 점이 남았다가 사라진다."""
     SPACING = 7
     LIFE = 0.7
     MAX_DOTS = 260
 
     def __init__(self):
-        self.images = [image('common', f'brush_dot_{c}.png') for c in PASTELS]
+        self.images = [image('common', f'brush_dot_{c}.png') for c in LIGHT_COLORS]
         self.dots = []  # [x, y, age, color_index]
         self.last = None
         self.hue = 0.0
@@ -140,7 +143,7 @@ class InkSplash:
     FADE = 1.2
 
     def __init__(self, x, y):
-        self.image = image('common', f'ink_drop_{random.choice(PASTELS)}.png')
+        self.image = image('common', f'ink_drop_{random.choice(INK_COLORS)}.png')
         self.x, self.y = x, y
         self.size = random.uniform(80, 120)
         self.rot = random.uniform(0, 2 * math.pi)
