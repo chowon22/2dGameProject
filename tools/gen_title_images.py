@@ -586,6 +586,7 @@ def main():
         save(ink_drop(ELEMENT[name], 90 + i), 'common', f'ink_drop_{name}.png')
     save(cursor_pen(), 'common', 'cursor_pen.png')
 
+    save(Image.new('RGBA', (16, 16), (6, 6, 20, 255)), 'settings', 'dim.png')  # 알파 채널이 있어야 opacify가 먹는다
     save(settings_panel(), 'settings', 'panel.png')
     save(slider_track(), 'settings', 'slider_track.png')
     save(slider_track(ELEMENT['blue']), 'settings', 'slider_fill.png')
