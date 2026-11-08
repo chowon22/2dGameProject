@@ -1,6 +1,7 @@
 """'파스텔' 그림체(처음 만든 파스텔 수채화 타이틀)의 부품을 같은 그림체로 그린다.
 
-배경은 처음 버전 이미지를 그대로 쓴다 (git cd3721a 의 image/title/background.png).
+배경은 처음 버전 컬러 배경(git cd3721a 의 image/title/background.png)을 흑백으로 바꿔 깔고,
+모래시계에서부터 색이 번져 나가는 물들이기 층(dye_*.png)을 만든다.
 여기서는 한 줄 손글씨 로고, 위 칸이 검정 잉크인 모래시계, 감자꽃 손글씨 쪽지 버튼,
 진주 비눗방울, 잉크통 아래 빛 웅덩이, 같은 종이 쪽지 그림체의 설정 창을 그린다.
 
@@ -381,7 +382,58 @@ def toggle(on):
     return sh.result()
 
 
+# ================================================================ 물들이기 (흑백 → 색)
+DYE_FRAMES = 10
+DYE_FROM = (640, 720 - 262)  # 모래시계 자리 (PIL 좌표)에서부터 색이 번진다
+
+
+def color_background():
+    """처음 버전 컬러 배경 (git cd3721a)."""
+    import io
+    import subprocess
+    raw = subprocess.run(['git', 'show', 'cd3721a:image/title/background.png'], cwd=ROOT,
+                         capture_output=True, check=True).stdout
+    return Image.open(io.BytesIO(raw)).convert('RGB')
+
+
+def gray_background(col):
+    """색을 빼앗긴 세상: 밝기만 남기고 종이빛 흑백으로."""
+    g = np.asarray(col.convert('L'), np.float32)
+    g = 70 + g * 0.72  # 살짝 밝고 부드럽게
+    paper_tone = np.array((1.0, 0.985, 0.96), np.float32)
+    return Image.fromarray(np.clip(g[..., None] * paper_tone, 0, 255).astype(np.uint8), 'RGB')
+
+
+def dye_frames(col):
+    """모래시계에서부터 수채 물감이 번져 나가는 단계별 색 층. 끝은 울퉁불퉁하고 진한 물 자국이 진다."""
+    w, h = col.size
+    rgb = np.asarray(col, np.float32)
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    rng = np.random.default_rng(91)
+    noise = np.asarray(Image.fromarray((rng.random((h // 24 + 1, w // 24 + 1)) * 255).astype(np.uint8))
+                       .resize((w, h), Image.BICUBIC), np.float32) / 255
+    fine = np.asarray(Image.fromarray((rng.random((h // 6 + 1, w // 6 + 1)) * 255).astype(np.uint8))
+                      .resize((w, h), Image.BICUBIC), np.float32) / 255
+    dist = np.hypot(xx - DYE_FROM[0], (yy - DYE_FROM[1]) * 1.25) * (0.75 + 0.4 * noise + 0.12 * fine)
+    far = dist.max() * 1.02
+    frames = []
+    for i in range(DYE_FRAMES):
+        r = far * ((i + 1) / DYE_FRAMES) ** 1.15
+        m = np.clip((r - dist) / (16 + 26 * i / DYE_FRAMES), 0, 1)
+        last = i == DYE_FRAMES - 1
+        rim = 0 if last else np.exp(-((dist - r + 4) / 7) ** 2)
+        out = np.zeros((h, w, 4), np.float32)
+        out[..., :3] = rgb * (1 - rim * 0.18)[..., None] if not last else rgb
+        out[..., 3] = np.clip(m + rim * 0.5, 0, 1) * 255
+        frames.append(Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), 'RGBA'))
+    return frames
+
+
 def main():
+    col = color_background()
+    save(gray_background(col), 'background.png')
+    for i, f in enumerate(dye_frames(col)):
+        save(f, f'dye_{i}.png')
     save(logo(), 'logo.png')
     save(soft_glow(1060, 300, (255, 250, 240), 302, alpha=190), 'logo_glow.png')
     save(ink_bottle(), 'ink_bottle.png')
