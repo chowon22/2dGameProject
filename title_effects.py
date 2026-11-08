@@ -40,8 +40,8 @@ class Bubble:
         if self.y > SCREEN_H + 70:
             self.reset()
 
-    def draw(self):
-        fade = max(0.0, min(1.0, (SCREEN_H + 50 - self.y) / 240))
+    def draw(self, alpha=1.0):
+        fade = max(0.0, min(1.0, (SCREEN_H + 50 - self.y) / 240)) * alpha
         self.image.opacify((0.75 + 0.2 * math.sin(self.t * 2 + self.phase)) * fade)
         wobble = 1 + 0.05 * math.sin(self.t * 3 + self.phase)
         self.image.draw(self.x, self.y, self.size * wobble, self.size / wobble)
@@ -81,8 +81,8 @@ class Mote:
         if self.y > SCREEN_H + 40:
             self.reset()
 
-    def draw(self):
-        fade = max(0.0, min(1.0, (SCREEN_H + 20 - self.y) / 300, self.t / 1.0))
+    def draw(self, alpha=1.0):
+        fade = max(0.0, min(1.0, (SCREEN_H + 20 - self.y) / 300, self.t / 1.0)) * alpha
         self.image.opacify((0.55 + 0.45 * math.sin(self.t * self.blink + self.phase)) * fade)
         self.image.draw(self.x, self.y, self.size, self.size)
         self.image.opacify(1)
@@ -230,3 +230,58 @@ def sparkle_burst(x, y, count=5):
         out.append(Twinkle(x, y, random.uniform(12, 22), random.uniform(0.5, 0.9),
                            math.cos(a) * speed, math.sin(a) * speed))
     return out
+
+
+class InkDrip:
+    """모래시계 목에서 검정 잉크 방울이 맺혔다 떨어지고, 아래 칸에 닿으면 원소 색 방울로 톡 튄다.
+    위치는 모래시계 중심 기준 (가로 0, 세로 아래로 +), scale 은 모래시계 크기 배율."""
+    COLORS = ('red', 'green', 'blue')
+    NECK, FLOOR = 4, 82      # 모래시계 중심에서 목·아래 칸 바닥(쌓인 색 위)까지 (원래 크기 px)
+    GROW, GRAVITY = 0.45, 900.0
+    SPLASH_TIME = 0.6
+    DROP_SCALE, SPLASH_SCALE = 1.5, 1.6  # 작은 모래시계 안에서도 잘 보이게
+
+    def __init__(self, phase=0.0):
+        self.drop = image(folder('title'), 'drip_black.png')
+        self.splash_images = [image(folder('title'), f'drip_splash_{c}.png') for c in self.COLORS]
+        self.state, self.t, self.y, self.v = 'grow', -phase, 0.0, 0.0
+        self.color = 0
+        self.splash_t = None
+
+    def update(self):
+        dt = game_framework.frame_time
+        self.t += dt
+        if self.splash_t is not None:
+            self.splash_t += dt
+            if self.splash_t > self.SPLASH_TIME:
+                self.splash_t = None
+        if self.state == 'grow' and self.t >= self.GROW:
+            self.state, self.y, self.v = 'fall', 0.0, 40.0
+        elif self.state == 'fall':
+            self.v += self.GRAVITY * dt
+            self.y += self.v * dt
+            if self.y >= self.FLOOR - self.NECK:
+                self.state, self.t = 'grow', -random.uniform(0.15, 0.5)
+                self.splash_t, self.color = 0.0, (self.color + 1) % len(self.COLORS)
+
+    def draw(self, x, y, scale, alpha=1.0):
+        neck_y = y - self.NECK * scale
+        ds = scale * self.DROP_SCALE
+        if self.state == 'grow' and self.t > 0:
+            k = self.t / self.GROW
+            w = self.drop.w * ds * (0.4 + 0.6 * k)
+            self.drop.opacify(alpha)
+            self.drop.draw(x, neck_y - self.drop.h * ds * 0.4 * k, w, self.drop.h * ds * (0.4 + 0.6 * k))
+            self.drop.opacify(1)
+        elif self.state == 'fall':
+            stretch = 1 + min(0.5, self.v / 1600)
+            self.drop.opacify(alpha)
+            self.drop.draw(x, neck_y - self.y * scale, self.drop.w * ds / stretch, self.drop.h * ds * stretch)
+            self.drop.opacify(1)
+        if self.splash_t is not None:
+            k = self.splash_t / self.SPLASH_TIME
+            img = self.splash_images[self.color]
+            img.opacify(alpha * (1 - k ** 2))
+            s = scale * self.SPLASH_SCALE * (0.5 + 0.7 * (1 - (1 - k) ** 3))
+            img.draw(x, y - self.FLOOR * scale + img.h * s / 2 - 6 * scale, img.w * s, img.h * s)
+            img.opacify(1)
