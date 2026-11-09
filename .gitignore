@@ -5,3 +5,6 @@ __pycache__/
 
 # 개인 설정 값
 data/settings.json
+
+# 세이브 파일 (개인 진행 기록)
+data/saves/
