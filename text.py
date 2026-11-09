@@ -38,14 +38,16 @@ def image(s, size=28, color=(86, 68, 106), name=HAND):
     return _cache[key]
 
 
-def draw(s, x, y, size=28, color=(86, 68, 106), anchor='l', alpha=1.0, name=HAND):
-    """x, y 에 글씨를 그린다. anchor: 'l'(왼쪽 맞춤) / 'c'(가운데) / 'r'(오른쪽)."""
+def draw(s, x, y, size=28, color=(86, 68, 106), anchor='l', alpha=1.0, name=HAND, scale=1.0):
+    """x, y 에 글씨를 그린다. anchor: 'l'(왼쪽 맞춤) / 'c'(가운데) / 'r'(오른쪽).
+    scale: 만들어 둔 글씨를 그만큼 늘려 그린다 (버튼이 커질 때 함께 커지게)."""
     if not s:
         return
     img = image(s, size, color, name)
-    dx = {'l': img.w / 2, 'c': 0, 'r': -img.w / 2}[anchor]
+    w, h = img.w * scale, img.h * scale
+    dx = {'l': w / 2, 'c': 0, 'r': -w / 2}[anchor]
     if alpha < 1:
         img.opacify(alpha)
-    img.draw(x + dx, y)
+    img.draw(x + dx, y, w, h)
     if alpha < 1:
         img.opacify(1)

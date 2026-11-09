@@ -19,7 +19,7 @@ CX, CY = 640, 360
 SLOT_Y = (480, 365, 250)  # 슬롯 1·2·3 카드 높이 (tools/gen_save_select.py 의 창 배치와 맞춘다)
 CLOSE_Y = 130
 DELETE_RIGHT = 948         # 지우기 버튼 오른쪽 끝 x (카드 안쪽)
-TEXT_X = 340               # 슬롯 글씨 왼쪽 x
+TEXT_X = 384               # 슬롯 글씨 왼쪽 x (번호가 카드 왼쪽 테두리에 닿지 않게)
 OPEN_TIME = 0.25
 INK = (86, 68, 106)
 SOFT = (130, 112, 150)
@@ -166,22 +166,29 @@ def update():
 
 
 def draw_card(slot, card):
-    """카드 + 그 위 글씨. 카드는 흔들림 없이, 올리면 살짝 커진다."""
+    """카드 + 그 위 글씨. 카드는 흔들림 없이, 올리면 살짝 커지고 글씨·지우기 버튼도 카드 가운데를 기준으로 같이 커진다."""
     img = card.hover_image if card.hovered else card.normal
     s = card.scale
     img.draw(card.x, card.y, img.w * s, img.h * s)
-    y = card.y
+
+    def put(msg, x, y, size, color, anchor='l'):
+        text.draw(msg, card.x + (x - card.x) * s, card.y + y * s, size, color, anchor, scale=s)
+
     info = summaries[slot - 1]
-    text.draw(f'{slot}', TEXT_X - 20, y + 2, 44, INK, 'r')
+    put(f'{slot}', TEXT_X - 20, 2, 44, INK, 'r')
     if info is None:
-        text.draw('비어 있음', TEXT_X + 6, y + 14, 34, INK)
-        text.draw('눌러서 새 여정을 시작해요', TEXT_X + 6, y - 22, 24, SOFT)
+        put('비어 있음', TEXT_X + 6, 14, 34, INK)
+        put('눌러서 새 여정을 시작해요', TEXT_X + 6, -22, 24, SOFT)
         return
-    text.draw(save_data.stage_name(info['stage']), TEXT_X + 6, y + 14, 34, INK)
+    put(save_data.stage_name(info['stage']), TEXT_X + 6, 14, 34, INK)
     detail = (f'플레이 {save_data.format_play_time(info["play_time"])}  ·  '
               f'잉크 {info["ink_total"]}  ·  {save_data.format_saved_at(info["saved_at"])}')
-    text.draw(detail, TEXT_X + 6, y - 22, 22, SOFT)
-    visible_delete(slot).draw()
+    put(detail, TEXT_X + 6, -22, 22, SOFT)
+    d = visible_delete(slot)
+    home = d.x
+    d.x = card.x + (home - card.x) * s  # 카드가 커진 만큼 바깥으로
+    d.draw()
+    d.x = home
 
 
 def draw():
