@@ -4,6 +4,7 @@
 - 빛 입자가 떠오르고 별이 반짝인다. 마우스는 분필 깃펜이 되어 빛나는 붓자국을 남긴다.
 - 빈 곳을 클릭하면 원소 색 잉크 방울이 톡 튄다.
 - 시작하기(Enter/Space) → 준비 화면, 설정 → 설정 창, 끝내기(ESC) → 종료.
+- ↑ / ↓: (되찾은 색 밤) 밤 전용 버튼 ↔ 낮과 같은 버튼
 - →: 다음 그림체, ←: 이전 그림체 (낙서체 → 몽환 → 스케치북 → 잉크 → 파스텔 → 되찾은 색 → 되찾은 색 밤)
 - 잉크·파스텔 그림체는 흑백 세상에서 시작해 잉크통(모래시계)에서부터 수채 물감이 번져 색이 칠해진다
 - 되찾은 색 그림체는 로고 'Ink' 도 검정 잉크로 시작해, 물감이 닿으면 I·n·k 가 빨강·초록·파랑으로 물든다.
@@ -12,7 +13,7 @@
 import math
 from pico2d import (clear_canvas, update_canvas, get_events, get_canvas_height, hide_cursor, show_cursor,
                     SDL_QUIT, SDL_KEYDOWN, SDL_MOUSEMOTION, SDL_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT,
-                    SDLK_ESCAPE, SDLK_RETURN, SDLK_SPACE, SDLK_LEFT, SDLK_RIGHT)
+                    SDLK_ESCAPE, SDLK_RETURN, SDLK_SPACE, SDLK_LEFT, SDLK_RIGHT, SDLK_UP, SDLK_DOWN)
 
 import game_framework
 import prepare_mode
@@ -36,7 +37,7 @@ LAYOUTS = {
                 'letters': ((194, -12, 0.42), (262, -12, 0.50), (340, -12, 0.58)), 'late_ui': 0.8,
                 'logo_glow': False},  # 로고 뒤 빛 번짐이 어두운 배경에서 뿌옇게 깜빡여서 끈다
 }
-LAYOUTS['restore_night'] = LAYOUTS['restore']  # 밤 버전은 배경만 다르다
+LAYOUTS['restore_night'] = dict(LAYOUTS['restore'], day_buttons='title_pastel')  # 밤 버전은 배경·버튼만 다르다
 LETTER_FADE = 0.06  # 글자 하나가 다 물드는 데 걸리는 진행도
 DYE_START, DYE_TIME = 0.5, 6.0  # 물들이기: 시작 시각과 다 번지는 데 걸리는 시간(초)
 BUTTON_Y = 70
@@ -106,14 +107,7 @@ def load_scene():
     subtitle = image(title, 'subtitle.png') if exists(title, 'subtitle.png') else None
     cursor = image('common', 'cursor_pen.png')
 
-    lay = layout()
-    gap, by = lay.get('button_gap', BUTTON_GAP), lay.get('button_y', BUTTON_Y)
-    buttons = [
-        Button(CX - gap, by, 'button_start.png', 'button_start_hover.png', start_game, 0.0, title),
-        Button(CX, by, 'button_settings.png', 'button_settings_hover.png', open_settings, 0.8, title),
-        Button(CX + gap, by, 'button_quit.png', 'button_quit_hover.png', game_framework.quit, 1.6,
-               title),
-    ]
+    buttons = make_buttons()
     bubbles = [Bubble(start_anywhere=True) for _ in range(12)]
     motes = [Mote(start_anywhere=True) for _ in range(28)]
     twinkles = [Twinkle() for _ in range(14)]
@@ -121,6 +115,32 @@ def load_scene():
     trail = BrushTrail()
     t = 0.0
     mouse = (-100, -100)
+
+
+def make_buttons():
+    """버튼 세 개. day_buttons 가 있는 그림체(되찾은 색 밤)는 설정에 따라 낮과 같은 버튼을 쓸 수 있다."""
+    lay = layout()
+    gap, by = lay.get('button_gap', BUTTON_GAP), lay.get('button_y', BUTTON_Y)
+    where = folder('title')
+    if lay.get('day_buttons') and not settings.get('night_buttons'):
+        where = lay['day_buttons']
+    return [
+        Button(CX - gap, by, 'button_start.png', 'button_start_hover.png', start_game, 0.0, where),
+        Button(CX, by, 'button_settings.png', 'button_settings_hover.png', open_settings, 0.8, where),
+        Button(CX + gap, by, 'button_quit.png', 'button_quit_hover.png', game_framework.quit, 1.6, where),
+    ]
+
+
+def toggle_button_style():
+    """밤 전용 버튼 ↔ 낮과 같은 버튼 (그런 그림체에서만). 저장하고 버튼만 다시 만든다."""
+    global buttons
+    if not layout().get('day_buttons'):
+        return
+    settings.set('night_buttons', not settings.get('night_buttons'))
+    settings.save()
+    buttons = make_buttons()
+    for b in buttons:
+        b.mouse_move(*mouse)
 
 
 def finish():
@@ -164,6 +184,8 @@ def handle_events():
                 switch_theme(1)
             elif event.key == SDLK_LEFT:
                 switch_theme(-1)
+            elif event.key in (SDLK_UP, SDLK_DOWN):
+                toggle_button_style()
         elif event.type == SDL_MOUSEMOTION:
             move_mouse(to_canvas(event))
             for b in buttons:
