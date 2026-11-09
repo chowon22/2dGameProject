@@ -221,16 +221,18 @@ class BrushTrail:
 
 
 class InkSplash:
-    """클릭한 곳에 톡 튀었다가 번지며 사라지는 잉크 방울."""
-    POP = 0.12
-    HOLD = 0.5
-    FADE = 1.2
+    """클릭한 곳에 잉크가 톡 떨어져 튀고, 종이에 스며 살짝 더 번지며 사라진다 (tools/gen_ink_splat.py)."""
+    POP = 0.09    # 톡 튀어 퍼지는 시간
+    HOLD = 0.45
+    FADE = 1.1    # 스며들며 옅어지는 시간
 
     def __init__(self, x, y):
-        self.image = image('common', f'ink_drop_{random.choice(INK_COLORS)}.png')
+        color = random.choice(INK_COLORS)
+        self.image = image('common', f'ink_splat_{color}_{random.randint(0, 1)}.png')
         self.x, self.y = x, y
-        self.size = random.uniform(80, 120)
+        self.size = random.uniform(120, 160)
         self.rot = random.uniform(0, 2 * math.pi)
+        self.flip = random.choice(('', 'h'))
         self.t = 0.0
 
     @property
@@ -242,14 +244,15 @@ class InkSplash:
 
     def draw(self):
         if self.t < self.POP:
-            k, alpha = 0.6 + 0.5 * self.t / self.POP, 1.0
+            u = self.t / self.POP
+            k, alpha = 0.45 + 0.6 * (1 - (1 - u) ** 3), 1.0          # 빠르게 튀어 퍼짐
         else:
-            spread = (self.t - self.POP) / (self.HOLD + self.FADE)
-            k = 1.1 + 0.15 * spread
+            u = (self.t - self.POP) / (self.HOLD + self.FADE)
+            k = 1.05 + 0.1 * (1 - (1 - u) ** 2)                      # 종이에 스며 조금 더 번짐
             alpha = 1.0 if self.t < self.POP + self.HOLD else 1 - (self.t - self.POP - self.HOLD) / self.FADE
-        self.image.opacify(max(0.0, alpha) * 0.9)
+        self.image.opacify(max(0.0, alpha) * 0.92)
         s = self.size * k
-        self.image.composite_draw(self.rot, '', self.x, self.y, s, s)
+        self.image.composite_draw(self.rot, self.flip, self.x, self.y, s, s)
         self.image.opacify(1)
 
 

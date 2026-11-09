@@ -16,6 +16,8 @@ import math
 import os
 import sys
 
+import numpy as np
+
 from PIL import Image, ImageChops, ImageFilter
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -39,11 +41,27 @@ def save(img, name, out=OUT):
     print('saved', os.path.basename(out) + '/' + name, img.size)
 
 
-def save_world(col, out, night=False):
-    """컬러 배경 → 흑백 배경 + 물들이기 층."""
-    save(pastel.gray_background(col, night), 'background.png', out)
+def save_world(col, out, gray=None):
+    """컬러 배경 → 흑백 배경 + 물들이기 층. gray 를 주면 그 흑백 배경을 쓴다."""
+    save(gray or pastel.gray_background(col), 'background.png', out)
     for i, f in enumerate(pastel.dye_frames(col)):
         save(f, f'dye_{i}.png', out)
+
+
+NIGHT_DIM = 0.5  # 밤 흑백 = 낮 흑백 밝기 × 이 값 (달·동굴 빛은 그대로)
+
+
+def night_gray():
+    """밤 흑백 배경: 달이 뜬 낮 흑백과 같은 회색 톤을 그대로 어둡게 하고, 달무리·동굴 빛은 밝게, 별은 하얗게."""
+    day = np.asarray(pastel.gray_background(gen_title_bg.background('moon')), np.float32)
+    keep = gen_title_bg.night_keep(gen_title_bg.W / 2)[..., None]
+    out = day * (NIGHT_DIM * (1 - keep) + keep)
+    img = Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), 'RGB').convert('RGBA')
+    stars = gen_title_bg.night_stars().result()
+    r, g, b, a = stars.split()
+    gray_l = stars.convert('L')
+    img.alpha_composite(Image.merge('RGBA', (gray_l, gray_l, gray_l, a)))
+    return img.convert('RGB')
 
 
 def logo_layers():
@@ -203,7 +221,7 @@ def splash(color, seed):
 
 def main():
     save_world(gen_title_bg.background('sun'), OUT)                    # 낮: 달 대신 해
-    save_world(gen_title_bg.background('moon', night=True), NIGHT_OUT, night=True)  # 밤: 달과 별
+    save_world(gen_title_bg.background('moon', night=True), NIGHT_OUT, night_gray())  # 밤: 달과 별
     (base, *letters), centers = logo_layers()
     save(base, 'logo.png')
     for i, im in enumerate(letters):
