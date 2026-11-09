@@ -46,7 +46,7 @@ NIGHT_PAPER = (58, 50, 98)       # 밤 버튼 종이: 남보랏빛
 NIGHT_TEXT = (226, 218, 236)     # 밤 버튼 글씨: 눈에 띄지 않는 은은한 흰빛
 
 
-def button(label, fill_color, seed, hover, size=(300, 96), night=False):
+def button(label, fill_color, seed, hover, size=(300, 96), night=False, font_size=40):
     """처음 버전과 같은 종이 쪽지 버튼 (글씨만 감자꽃 손글씨).
     night: 밤 배경용. 달빛 아래 어스름한 종이 — 남보랏빛 종이에 버튼 색을 옅게 섞고,
     펜 선은 낮 버튼과 같은 보랏빛 펜, 글씨는 은은한 흰빛(어두운 그림자). 올리면 색이 밝게 번지고 반짝인다."""
@@ -92,7 +92,7 @@ def button(label, fill_color, seed, hover, size=(300, 96), night=False):
     if hover:
         sparkle_stroke(sh, x1 - 4, y0 + 2, 9, (255, 236, 150), 255, 2.6)
         sparkle_stroke(sh, x0 + 6, y1 - 4, 6, WHITE, 255, 2.2)
-    f = hand_font(40)
+    f = hand_font(font_size)
     if night:
         sh.ink_text(label, f, bw / 2 + 2, bh / 2 + 4, (34, 28, 60), 140, anchor='mm')  # 옅은 그림자
         text = NIGHT_TEXT
