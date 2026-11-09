@@ -33,7 +33,8 @@ LAYOUTS = {
                'button_gap': 300, 'button_y': 78},
     # 되찾은 색: 파스텔과 같은 배치. letters = I·n·k 색 층의 (로고 중심 기준 x, y, 물들기 시작하는 진행도)
     'restore': {'logo': (640, 560), 'bottle_y': 262, 'bottle_scale': 0.9, 'button_gap': 300, 'button_y': 78,
-                'letters': ((194, -12, 0.42), (262, -12, 0.50), (340, -12, 0.58)), 'late_ui': 0.8},
+                'letters': ((194, -12, 0.42), (262, -12, 0.50), (340, -12, 0.58)), 'late_ui': 0.8,
+                'logo_glow': False},  # 로고 뒤 빛 번짐이 어두운 배경에서 뿌옇게 깜빡여서 끈다
 }
 LAYOUTS['restore_night'] = LAYOUTS['restore']  # 밤 버전은 배경만 다르다
 LETTER_FADE = 0.06  # 글자 하나가 다 물드는 데 걸리는 진행도
@@ -282,7 +283,8 @@ def draw_scene():
     # 로고: 처음에 위에서 내려앉으며 나타난다
     k = ease_out(t / INTRO)
     logo_y = logo_base_y + (1 - k) * 40 + math.sin(t * 1.1) * 4
-    draw_with_alpha(logo_glow, k * (0.55 + 0.25 * math.sin(t * 1.5)), logo_x, logo_y)
+    if lay.get('logo_glow', True):
+        draw_with_alpha(logo_glow, k * (0.55 + 0.25 * math.sin(t * 1.5)), logo_x, logo_y)
     draw_with_alpha(logo, k, logo_x, logo_y)
     p = dye_progress()
     for img, (_, _, start) in zip(logo_inks, lay.get('letters', ())):

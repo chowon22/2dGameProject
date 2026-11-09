@@ -42,8 +42,14 @@ def sparkle_stroke(sh, x, y, r, color, alpha=230, width=2.2):
     sh.stroke([(x - r, y), (x, y + r * 0.15), (x + r, y)], width, color, alpha, amp=0.2)
 
 
-def button(label, fill_color, seed, hover, size=(300, 96)):
-    """처음 버전과 같은 종이 쪽지 버튼 (글씨만 감자꽃 손글씨)."""
+NIGHT_PAPER = (58, 50, 98)       # 밤 버튼 종이: 남보랏빛
+NIGHT_TEXT = (226, 218, 236)     # 밤 버튼 글씨: 눈에 띄지 않는 은은한 흰빛
+
+
+def button(label, fill_color, seed, hover, size=(300, 96), night=False):
+    """처음 버전과 같은 종이 쪽지 버튼 (글씨만 감자꽃 손글씨).
+    night: 밤 배경용. 달빛 아래 어스름한 종이 — 남보랏빛 종이에 버튼 색을 옅게 섞고,
+    펜 선은 낮 버튼과 같은 보랏빛 펜, 글씨는 은은한 흰빛(어두운 그림자). 올리면 색이 밝게 번지고 반짝인다."""
     bw, bh = size
     sh = Sheet(bw, bh, seed=seed)
     sh.line = PLUM
@@ -59,19 +65,42 @@ def button(label, fill_color, seed, hover, size=(300, 96)):
         bezier((x0, y0 + r), (x0, y0 - 1), (x0 + 2, y0 - 1), (x0 + r + 10, y0 - 1), 6)[1:]
     fill = Sheet(bw, bh, seed=seed + 1)
     rx, ry = (x1 - x0) / 2 + 10, (y1 - y0) / 2 + 10
-    fill.wash(bw / 2, bh / 2, rx, ry, (255, 252, 248), alpha=255, layers=2, blur=4, wobble=0.04)
-    fill.wash(bw / 2, bh / 2, rx, ry, fill_color, alpha=255 if hover else 150, layers=4, blur=4, wobble=0.05)
-    fill.wash(bw / 2 - 70, bh / 2 - 8, 60, 14, WHITE, alpha=130, layers=2)
+    if night:
+        k = 0.8 if hover else 0.62  # 버튼 색이 섞이는 정도
+        mix = lambda a, b, t: tuple(int(x * (1 - t) + y * t) for x, y in zip(a, b))  # noqa: E731
+        tint = mix(NIGHT_PAPER, fill_color, k)
+        deep = mix(NIGHT_PAPER, fill_color, k * 0.55)
+        light = mix(tint, (255, 250, 240), 0.22)
+        fill.fill_poly([(0, 0), (bw, 0), (bw, bh), (0, bh)], deep, 255)
+        # 물감 얼룩을 여러 겹: 가장자리가 진하게 마른 자국(edge), 농담이 고르지 않게
+        rng = fill.rng
+        for i in range(4):
+            cx_ = x0 + (x1 - x0) * (0.15 + 0.7 * i / 3) + rng.uniform(-14, 14)
+            fill.wash(cx_, bh / 2 + rng.uniform(-6, 6), rng.uniform(52, 72), rng.uniform(24, 32), tint,
+                      alpha=rng.randint(170, 220), layers=3, edge=1.8, blur=2.5, wobble=0.16)
+        # 물이 번져 밝게 빠진 자리 하나 (수채 블룸)
+        fill.wash(bw / 2 + rng.uniform(-60, 60), bh / 2 - 4, rng.uniform(26, 36), rng.uniform(12, 16), light,
+                  alpha=150 if hover else 110, layers=3, edge=2.2, blur=1.8, wobble=0.2)
+    else:
+        fill.wash(bw / 2, bh / 2, rx, ry, (255, 252, 248), alpha=255, layers=2, blur=4, wobble=0.04)
+        fill.wash(bw / 2, bh / 2, rx, ry, fill_color, alpha=255 if hover else 150, layers=4, blur=4, wobble=0.05)
+        fill.wash(bw / 2 - 70, bh / 2 - 8, 60, 14, WHITE, alpha=130, layers=2)
     sh.masked(fill, poly_mask((bw, bh), box))
     sh.stroke(box, 4.2)
-    sh.stroke([(x0 + 24, y1 + 5), (x1 - 6, y1 + 4)], 2.2, SOFT_PLUM, 150)
+    if not night:  # 밤엔 종이 아래 그림자 선이 어두운 땅에 묻혀 지저분해 보여서 뺀다
+        sh.stroke([(x0 + 24, y1 + 5), (x1 - 6, y1 + 4)], 2.2, SOFT_PLUM, 150)
     if hover:
         sparkle_stroke(sh, x1 - 4, y0 + 2, 9, (255, 236, 150), 255, 2.6)
         sparkle_stroke(sh, x0 + 6, y1 - 4, 6, WHITE, 255, 2.2)
     f = hand_font(40)
-    sh.ink_text(label, f, bw / 2 + 2, bh / 2 + 4, WHITE, 220, anchor='mm')
-    sh.ink_text(label, f, bw / 2, bh / 2 + 2, PLUM, 255, anchor='mm')
-    sh.ink_text(label, f, bw / 2 + 0.8, bh / 2 + 2, PLUM, 255, anchor='mm')  # 살짝 두껍게
+    if night:
+        sh.ink_text(label, f, bw / 2 + 2, bh / 2 + 4, (34, 28, 60), 140, anchor='mm')  # 옅은 그림자
+        text = NIGHT_TEXT
+    else:
+        sh.ink_text(label, f, bw / 2 + 2, bh / 2 + 4, WHITE, 220, anchor='mm')
+        text = PLUM
+    sh.ink_text(label, f, bw / 2, bh / 2 + 2, text, 255, anchor='mm')
+    sh.ink_text(label, f, bw / 2 + 0.8, bh / 2 + 2, text, 255, anchor='mm')  # 살짝 두껍게
     return sh.result()
 
 

@@ -7,7 +7,8 @@
   아래 칸에서 색 방울(drip_splash_*)로 튄다
 - 배경: 처음 파스텔 배경을 다시 그려(gen_title_bg) 낮은 달 대신 해, 밤 버전(title_restore_night)은 달과 별.
   각각 흑백 배경 + 물들이기 층(dye_*)을 만든다
-- 나머지(버튼·비눗방울 …)는 파스텔 그림체 이미지를 그대로 쓴다 (assets 의 FALLBACK)
+- 밤 버전 버튼은 밤 배경에 맞게 따로 그린다 (남보랏빛 종이 + 달빛 펜 선 + 크림빛 글씨)
+- 나머지(낮 버튼·비눗방울 …)는 파스텔 그림체 이미지를 그대로 쓴다 (assets 의 FALLBACK)
 
 실행:  python tools/gen_title_restore.py
 결과:  image/title_restore/*.png, image/title_restore_night/*.png
@@ -32,6 +33,17 @@ NIGHT_OUT = os.path.join(ROOT, 'image', 'title_restore_night')  # 밤 버전: �
 # I·n·k 가 되찾는 색 = 모래시계 아래 칸에 쌓인 원소 색
 TINTS = (WATERCOLOR['red'], WATERCOLOR['green'], WATERCOLOR['blue'])
 SPLASH = {'red': WATERCOLOR['red'], 'green': WATERCOLOR['green'], 'blue': WATERCOLOR['blue']}
+# 밤 버튼 색: 파스텔은 너무 옅어 남보라 종이에 섞으면 다 보라가 되므로 채도를 올린 색
+_NIGHT_BUTTON_VIVID = {'pink': (222, 112, 166), 'sky': (88, 156, 224), 'lavender': (156, 120, 226)}
+NIGHT_DESAT = 0.4  # 같은 밝기의 회색 쪽으로 당기는 정도 (클수록 채도가 낮다)
+
+
+def _desat(c, k=NIGHT_DESAT):
+    g = c[0] * 0.299 + c[1] * 0.587 + c[2] * 0.114
+    return tuple(int(v + (g - v) * k) for v in c)
+
+
+NIGHT_BUTTON = {k: _desat(v) for k, v in _NIGHT_BUTTON_VIVID.items()}
 DARK_LINE = (58, 44, 76)  # 'Ink' 바탕 테두리: 보랏빛 펜보다 한 톤 짙게
 
 
@@ -222,6 +234,11 @@ def splash(color, seed):
 def main():
     save_world(gen_title_bg.background('sun'), OUT)                    # 낮: 달 대신 해
     save_world(gen_title_bg.background('moon', night=True), NIGHT_OUT, night_gray())  # 밤: 달과 별
+    for name, label, tint, seed in (('start', '시작하기', 'pink', 81), ('quit', '끝내기', 'sky', 82),
+                                    ('settings', '설정', 'lavender', 83)):  # 밤 버튼: 달빛 아래 어스름한 종이
+        color = NIGHT_BUTTON[tint]
+        save(pastel.button(label, color, seed, False, night=True), f'button_{name}.png', NIGHT_OUT)
+        save(pastel.button(label, color, seed, True, night=True), f'button_{name}_hover.png', NIGHT_OUT)
     (base, *letters), centers = logo_layers()
     save(base, 'logo.png')
     for i, im in enumerate(letters):
