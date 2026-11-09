@@ -20,8 +20,7 @@ from ui_button import Button
 W, H = 1280, 720
 GROUND = 160            # 땅 윗선 (pico y). tools/gen_prepare.py 의 GROUND_Y(PIL 560) 와 같은 자리
 BOY_X = 400             # 소년이 달려와 멈추는(제자리 달리기) x
-BOY_SCALE = 0.56
-BOY_FEET = 250 - 130    # 스프라이트 가운데에서 발바닥까지 (boy_anime.FEET, 스프라이트 높이 260)
+BOY_FEET = 172 - 90     # 스프라이트 가운데에서 발바닥까지 (tools/boy_line.py FEET, 150x180 을 1:1 로 그림)
 ENTER_TIME = 1.6        # 왼쪽 밖에서 BOY_X 까지 달려 들어오는 시간
 RUN_FPS = 10
 RUN_CYCLE = (0, 1, 2, 1)
@@ -31,7 +30,7 @@ FADE_IN = 0.6
 TOAST_TIME = 1.8
 INK = (86, 68, 106)
 INK_COLORS = ('black', 'red', 'green', 'blue')
-IMAGES = ['sky', 'far', 'mid', 'ground', 'boy_0', 'boy_1', 'boy_2', 'shadow', 'hud', 'toast'] + \
+IMAGES = ['sky', 'far', 'mid', 'ground', 'boy_line_0', 'boy_line_1', 'boy_line_2', 'shadow', 'hud', 'toast'] + \
     [f'ink_{c}' for c in INK_COLORS]
 
 layers = {}
@@ -70,7 +69,7 @@ def back_to_title():
 def init():
     global layers, boys, buttons, splashes, fade, shadow, hud, toast_img, ink_icons, t, scroll, toast
     layers = {name: image('prepare', name + '.png') for name in ('sky', 'far', 'mid', 'ground')}
-    boys = [image('prepare', f'boy_{i}.png') for i in range(3)]
+    boys = [image('prepare', f'boy_line_{i}.png') for i in range(3)]
     shadow = image('prepare', 'shadow.png')
     hud = image('prepare', 'hud.png')
     toast_img = image('prepare', 'toast.png')
@@ -154,7 +153,7 @@ def draw_boy():
     x = boy_x()
     shadow.draw(x + 2, GROUND - 2, shadow.w * 0.55, shadow.h * 0.6)
     img = boys[frame]
-    img.draw(x, GROUND - 4 + BOY_FEET * BOY_SCALE, img.w * BOY_SCALE, img.h * BOY_SCALE)
+    img.draw(round(x), GROUND - 4 + BOY_FEET)   # 선 굵기가 배경과 같게 1:1 로
 
 
 def draw_hud():
