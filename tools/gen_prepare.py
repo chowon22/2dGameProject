@@ -152,8 +152,8 @@ def ground():
     return wrapped(draw, 331, gh)
 
 
-# ================================================================ 소년 (tools/boy_sprite.py)
-from boy_sprite import boy, FEET  # noqa: E402
+# ================================================================ 소년 (tools/boy_anime.py)
+from boy_anime import boy, FEET  # noqa: E402
 
 
 def shadow():
@@ -187,8 +187,10 @@ def loading():
     sh.stroke(hill, 3.6, (230, 220, 245), 230, taper=False)
     sh.wash(640, 410, 190, 120, (255, 240, 200), alpha=60, layers=3, blur=12)   # 은은한 빛
     base.alpha_composite(sh.result())
+    k = 0.7
     b = boy(0)
-    base.alpha_composite(b, (640 - b.width // 2 + 10, 452 - FEET))
+    b = b.resize((int(b.width * k), int(b.height * k)), Image.LANCZOS)
+    base.alpha_composite(b, (640 - b.width // 2 + 10, 452 - int(FEET * k)))
     t = Sheet(W, H, seed=502)
     f = pastel.hand_font(46)
     t.ink_text('여정을 준비하는 중', f, 642, 594, (34, 28, 60), 150, anchor='mm')

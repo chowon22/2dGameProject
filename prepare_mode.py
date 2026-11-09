@@ -20,8 +20,8 @@ from ui_button import Button
 W, H = 1280, 720
 GROUND = 160            # 땅 윗선 (pico y). tools/gen_prepare.py 의 GROUND_Y(PIL 560) 와 같은 자리
 BOY_X = 400             # 소년이 달려와 멈추는(제자리 달리기) x
-BOY_SCALE = 0.8
-BOY_FEET = 168 - 90     # 스프라이트 가운데에서 발바닥까지 (boy_sprite.FEET, 스프라이트 높이 180)
+BOY_SCALE = 0.56
+BOY_FEET = 250 - 130    # 스프라이트 가운데에서 발바닥까지 (boy_anime.FEET, 스프라이트 높이 260)
 ENTER_TIME = 1.6        # 왼쪽 밖에서 BOY_X 까지 달려 들어오는 시간
 RUN_FPS = 10
 RUN_CYCLE = (0, 1, 2, 1)
