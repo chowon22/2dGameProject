@@ -33,6 +33,15 @@ def pop_mode():
         stack[-1].resume()
 
 
+def reset_mode(mode):
+    """쌓여 있는 모드를 모두 끝내고 mode 하나만 남긴다 (타이틀 위 로딩 → 준비 화면처럼)."""
+    while stack:
+        stack[-1].finish()
+        stack.pop()
+    stack.append(mode)
+    mode.init()
+
+
 def quit():
     global running
     running = False
