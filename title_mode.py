@@ -3,7 +3,7 @@
 - 깊은 밤 하늘 아래, 빛을 내뿜는 모래시계 잉크통이 둥실 떠 있고 로고가 내려앉는다.
 - 빛 입자가 떠오르고 별이 반짝인다. 마우스는 분필 깃펜이 되어 빛나는 붓자국을 남긴다.
 - 빈 곳을 클릭하면 원소 색 잉크 방울이 톡 튄다.
-- 시작하기(Enter/Space) → 준비 화면, 설정 → 설정 창, 끝내기(ESC) → 종료.
+- 시작하기(Enter/Space) → 세이브 파일 선택 창 → 준비 화면, 설정 → 설정 창, 끝내기(ESC) → 종료.
 - ↑ / ↓: (되찾은 색 밤) 밤 전용 버튼 ↔ 낮과 같은 버튼
 - →: 다음 그림체, ←: 이전 그림체 (낙서체 → 몽환 → 스케치북 → 잉크 → 파스텔 → 되찾은 색 → 되찾은 색 밤)
 - 잉크·파스텔 그림체는 흑백 세상에서 시작해 잉크통(모래시계)에서부터 수채 물감이 번져 색이 칠해진다
@@ -17,6 +17,7 @@ from pico2d import (clear_canvas, update_canvas, get_events, get_canvas_height, 
 
 import game_framework
 import prepare_mode
+import save_select_mode
 import settings
 import settings_mode
 from assets import image, folder, exists
@@ -60,6 +61,11 @@ mouse = (-100, -100)
 
 
 def start_game():
+    """세이브 파일 선택 창을 띄운다. 슬롯을 고르면 그 창이 enter_game() 을 부른다."""
+    game_framework.push_mode(save_select_mode)
+
+
+def enter_game():
     game_framework.change_mode(prepare_mode)
 
 
