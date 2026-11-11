@@ -39,6 +39,7 @@ def blank(slot, now=None):
         'saved_at': now,
         'play_time': 0.0,     # 초
         'stage': 0,           # 여정 진행 (0 = 아직 첫 필드 전)
+        'intro_seen': False,  # 도입 이야기(컷씬)를 봤는가 — 보기 전이면 준비 화면 전에 보여 준다
         'ink': {'black': START_INK, 'red': 0, 'green': 0, 'blue': 0},
         'units': [],          # 그린 유닛 (PNG 경로·틀·색 비율 …) — 준비 화면이 생기면 채운다
     }

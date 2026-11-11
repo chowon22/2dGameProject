@@ -73,6 +73,20 @@ class SaveDataTest(unittest.TestCase):
         self.assertIn('ink', data)
         self.assertNotIn('unknown', data)
 
+    def test_intro_seen(self):
+        """새 게임은 도입 이야기를 아직 안 봤고, 본 것으로 적으면 다시 불러와도 남는다."""
+        data = save_data.new_game(1, self.dir, now=0.0)
+        self.assertFalse(data['intro_seen'])
+        data['intro_seen'] = True
+        save_data.save_current(self.dir, now=1.0)
+        self.assertTrue(save_data.load(1, self.dir)['intro_seen'])
+
+    def test_old_save_has_not_seen_intro(self):
+        """intro_seen 이 없던 예전 세이브는 아직 안 본 것으로 (이어하면 한 번 보여 준다)."""
+        with open(os.path.join(self.dir, 'slot_2.json'), 'w', encoding='utf-8') as f:
+            json.dump({'stage': 0}, f)
+        self.assertFalse(save_data.load(2, self.dir)['intro_seen'])
+
     def test_bad_slot(self):
         with self.assertRaises(ValueError):
             save_data.load(0, self.dir)
