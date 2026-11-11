@@ -8,7 +8,8 @@
 - man.png: 긴 외투에 챙 넓은 모자를 쓴 남자 실루엣 
 - sleeper.png: 이불을 덮고 잠든 소년 
 - carrier_red/green/blue.png: 색을 몸에 담아 나르는 운반자 몬스터 
-- seal.png: 봉인 장소 , black_bottle.png: 검정 잉크통 (모래시계 위 칸, 타이틀 split_bottle 과 같은 그림)
+- seal.png: 봉인 장소, black_bottle.png / color_bottle.png: 검정·컬러 잉크통 (타이틀 모래시계 split_bottle 의 위·아래 칸.
+  모래시계는 두 잉크통이 합쳐진 모습이고, 이야기에서는 컬러를 동굴에서, 검정을 봉인 장소에서 따로 찾는다)
 - run_sky/far/mid/ground.png: 색을 빼앗긴 흑백 들판 (준비 화면 층을 흑백으로)
 - caption.png: 자막 쪽지
 
@@ -297,17 +298,29 @@ def seal():
     return base.convert('RGB')
 
 
-def black_bottle():
-    """타이틀 split_bottle 의 위 칸 (검정 잉크통). 목 이음 고리 아래에서 자른다."""
+def _split_halves():
+    """타이틀 모래시계(split_bottle)를 목 이음 고리에서 두 병으로 가른다 → (위 검정 잉크통, 아래 컬러 잉크통).
+    모래시계는 두 잉크통이 합쳐진 모습이고, 이야기에서는 따로 찾는다 (동굴: 컬러, 봉인 장소: 검정).
+    고리는 양쪽에 다 남긴다 (고리는 목보다 살짝 넓다: 목에서 위아래로 8px)."""
     img = restore.split_bottle()
     a = np.asarray(img)[..., 3] > 40
     h = a.shape[0]
     widths = a.sum(1)
     mid = slice(h // 3, h * 2 // 3)
     neck = h // 3 + int(np.argmin(widths[mid]))
-    # 고리 아랫단까지 포함 (고리는 목보다 살짝 넓다): 목에서 아래로 8px
-    out = img.crop((0, 0, img.width, neck + 8))
-    return out.crop(out.getbbox())
+    top = img.crop((0, 0, img.width, neck + 8))
+    bottom = img.crop((0, neck - 8, img.width, h))
+    return top.crop(top.getbbox()), bottom.crop(bottom.getbbox())
+
+
+def black_bottle():
+    """검정 잉크통 (모래시계 위 칸)."""
+    return _split_halves()[0]
+
+
+def color_bottle():
+    """컬러 잉크통 (모래시계 아래 칸). 동굴에서 찾고, 남자가 가져간다."""
+    return _split_halves()[1]
 
 
 # ================================================================ 동굴 안
@@ -487,6 +500,7 @@ def main():
     print('saved cutscene_inside/background.png, dye_0..9.png')
     save(seal(), 'seal.png')
     save(black_bottle(), 'black_bottle.png')
+    save(color_bottle(), 'color_bottle.png')
     for name in ('sky', 'far', 'mid', 'ground'):
         save(gray_layer(name), f'run_{name}.png')
     save(caption(), 'caption.png')

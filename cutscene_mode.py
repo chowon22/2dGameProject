@@ -13,7 +13,7 @@
 - ESC: 건너뛰기
 - 끝나면(건너뛰어도) 세이브에 본 것으로 적고 준비 화면으로 (로딩 화면 대신 컷씬이 준비 화면 이미지를 미리 읽는다)
 
-바깥 동굴(낮·밤)과 컬러 잉크통은 타이틀 그림, 동굴 안은 image/cutscene_inside, 소년은 준비 화면 달리기 스프라이트, 나머지는 tools/gen_cutscene.py.
+바깥 동굴(낮·밤)은 타이틀 그림, 동굴 안은 image/cutscene_inside, 소년은 준비 화면 달리기 스프라이트, 나머지는 tools/gen_cutscene.py.
 """
 import math
 import random
@@ -38,8 +38,10 @@ CAPTION_Y = 62
 CAPTION_SIZE = 34
 INK = (86, 68, 106)
 HINT = (250, 246, 255)
-BOTTLE = (CX, 250)      # 동굴 안 컬러 잉크통 자리 (타이틀 물들이기가 시작되는 곳: gen_title_pastel.DYE_FROM)
-BOTTLE_SCALE = 0.6
+# 컬러 잉크통 자리: 동굴 안 바위 위에 떠 있다 (물들이기가 시작되는 곳 gen_title_pastel.DYE_FROM 바로 아래).
+# 모래시계는 검정·컬러 두 잉크통이 합쳐진 모습이고, 동굴에서 찾는 건 아래 칸 컬러 잉크통 하나다
+BOTTLE = (CX, 245)
+BOTTLE_SCALE = 0.75
 COLORS = ('red', 'green', 'blue')
 
 
@@ -109,7 +111,7 @@ def draw_boy(t, x, ground=GROUND, frame=None, flip=False, lift=0.0, scale=1.0, a
 
 
 def draw_bottle(t, x, y, scale=BOTTLE_SCALE, glow=0.6, float_k=1.0):
-    """둥실 떠서 숨 쉬듯 빛나는 컬러 잉크통 (타이틀과 같은 그림). float_k: 둥실거리는 정도 (손에 들면 0)."""
+    """둥실 떠서 숨 쉬듯 빛나는 컬러 잉크통 (타이틀 모래시계의 아래 칸). float_k: 둥실거리는 정도 (손에 들면 0)."""
     fy = math.sin(t * 1.3) * 6 * scale * float_k
     draw_alpha(bottle_glow, glow * (0.8 + 0.2 * math.sin(t * 1.7)), x, y + fy,
                bottle_glow.w * scale, bottle_glow.h * scale)
@@ -387,7 +389,7 @@ class NightCut(Cut):
         # 잉크통: 동굴 안에 떠 있다가 둘째 문장에서 남자 손으로 날아간다
         grab = 0.0 if self.step == 0 else ease_in_out((self.st - 0.6) / 0.8)
         hx, hy = self.hand(x, y)
-        bs = 0.34
+        bs = 0.45
         bx = BOTTLE[0] + (hx - BOTTLE[0]) * grab
         by = BOTTLE[1] + (hy + bottle.h * bs / 2 - BOTTLE[1]) * grab
         scale = BOTTLE_SCALE + (bs - BOTTLE_SCALE) * grab
@@ -543,7 +545,7 @@ def load_images():
     sparkle = image('title_pastel', 'sparkle.png')
     shadow = image('prepare', 'shadow.png')
     boys = [image('prepare', f'boy_run_{i}.png') for i in range(prepare_mode.RUN_FRAMES)]
-    bottle = image('title_restore', 'ink_bottle.png')
+    bottle = image('cutscene', 'color_bottle.png')
     bottle_glow = image('title_pastel', 'bottle_glow.png')
     bg_gray = image('title_restore', 'background.png')
     bg_night = image('title_restore_night', 'background.png')
