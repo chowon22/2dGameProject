@@ -298,73 +298,80 @@ def seal():
     return base.convert('RGB')
 
 
-def flask(kind):
-    """잉크통 한 병 (kind: 'color' / 'black'). 모래시계는 이 두 병이 목을 맞대고 합쳐진 모습이다
-    (위가 거꾸로 선 검정, 아래가 컬러). 이야기에서는 따로 찾으므로 자르지 않고 한 병씩 그린다.
-    - 몸통: 타이틀 모래시계 아래 칸과 같은 둥근 유리 (gen_title_restore.split_bottle 의 lower 곡선)
-    - 짧은 유리 목 + 나무 마개 (컬러는 파스텔 나무, 검정은 모래시계 위 칸과 같은 먹빛 나무)
-    - 바닥 받침은 병 폭만큼만, 양옆 기둥은 없다"""
-    bw, bh = 220, 250
+def half_bottle(kind):
+    """타이틀 모래시계(gen_title_restore.split_bottle)의 반쪽 그대로 (kind: 'black' 위 칸 / 'color' 아래 칸).
+    모래시계는 검정·컬러 두 잉크통이 목의 이음 고리에서 합쳐진 모습이고, 이야기에서는 따로 찾는다
+    (동굴: 컬러, 봉인 장소: 검정). 잘라 쓰지 않고 같은 곡선·나무판·이음 고리로 그 반쪽만 그린다.
+    양옆 기둥은 두 병을 이어 주는 틀이라 뺀다.
+    - 컬러: 이음 고리(위) → 둥근 유리 → 넓은 파스텔 나무판(아래), 바닥에 모인 빨강·초록·파랑
+    - 검정: 넓은 먹빛 나무판(위) → 유리 → 이음 고리(아래), 위 칸을 채운 검정 잉크"""
+    bw, bh = 240, 320
     cx = bw / 2
-    sh = Sheet(bw, bh, seed=901 if kind == 'color' else 911)
+    sh = Sheet(bw, bh, seed=41)
     sh.line = PLUM
-    neck, bottom = 58, 224          # 몸통이 시작되는 목 / 바닥
-    body = bezier((cx - 11, neck), (cx - 16, neck + 30), (cx - 88, bottom - 80), (cx - 80, bottom), 40)
-    mirror = [(2 * cx - x, y) for x, y in body]
-    tube_top = neck - 22
-    glass_pts = [(cx - 11, tube_top)] + body + mirror[::-1] + [(cx + 11, tube_top)]
-    inside = pastel.poly_mask((bw, bh), glass_pts)
-    wood = PASTEL['peach'] if kind == 'color' else (214, 186, 170)
-
-    g = Sheet(bw, bh, seed=sh.rng.randint(0, 9999))
-    g.wash(cx, (neck + bottom) / 2, 80, 90, (236, 240, 255), alpha=150, layers=2)   # 유리 빛
-    if kind == 'color':
-        g.wash(cx - 24, bottom - 18, 36, 18, WATERCOLOR['red'], alpha=225, layers=3)
-        g.wash(cx + 22, bottom - 16, 34, 17, WATERCOLOR['blue'], alpha=225, layers=3)
-        g.wash(cx, bottom - 28, 24, 14, WATERCOLOR['green'], alpha=225, layers=3)
+    top, bottom = 46, 274
+    neck = (top + bottom) / 2
+    if kind == 'black':
+        half = bezier((cx - 78, top), (cx - 86, top + 80), (cx - 14, neck - 30), (cx - 9, neck), 40)
     else:
-        surf = bottom - 62   # 바닥에 고인 검정 잉크 (수면이 살짝 출렁)
-        pool = [(x, surf + 3 * math.sin(x / 9) + 2 * math.sin(x / 4 + 1)) for x in range(0, bw + 1, 4)]
-        ink = Sheet(bw, bh, seed=912)
-        ink.fill_poly([(0, 0), (bw, 0), (bw, bh), (0, bh)], INK, 250)
-        ink.wash(cx + 22, bottom - 30, 30, 20, (78, 62, 102), alpha=150, layers=3, blur=4)   # 보랏빛 먹 번짐
-        ink.wash(cx - 26, surf + 8, 26, 6, (120, 112, 138), alpha=170, layers=2, blur=2)      # 수면 윤기
-        g.masked(ink, pastel.poly_mask((bw, bh), pool + [(bw, bh), (0, bh)]))
-    sh.masked(g, inside)
+        half = bezier((cx - 9, neck), (cx - 14, neck + 30), (cx - 86, bottom - 80), (cx - 78, bottom), 40)
+    mirror = [(2 * cx - x, y) for x, y in half]
+    mask = pastel.poly_mask((bw, bh), half + mirror[::-1])
+    dark_wood = (214, 186, 170)   # 검정 잉크통 쪽 나무 (split_bottle 과 같은 색)
 
-    sh.stroke(body, 4.4)
+    glass = Sheet(bw, bh, seed=42)
+    glass.wash(cx, neck, 80, 130, (236, 240, 255), alpha=150, layers=2)
+    if kind == 'black':
+        surf = top + 40
+        pool = [(x, surf + 3 * math.sin(x / 9) + 2 * math.sin(x / 4 + 1)) for x in range(0, bw + 1, 4)]
+        ink = Sheet(bw, bh, seed=44)
+        ink.fill_poly([(0, 0), (bw, 0), (bw, bh), (0, bh)], INK, 250)
+        ink.wash(cx + 22, surf + 34, 30, 22, (78, 62, 102), alpha=150, layers=3, blur=4)
+        ink.wash(cx - 30, surf + 8, 24, 6, (120, 112, 138), alpha=170, layers=2, blur=2)
+        glass.masked(ink, pastel.poly_mask((bw, bh), pool + [(bw, neck + 6), (0, neck + 6)]))
+        glass.wash(cx, top + 30, 60, 22, WHITE, alpha=130, layers=2, blur=4)
+    else:
+        glass.wash(cx - 22, bottom - 16, 34, 16, WATERCOLOR['red'], alpha=220, layers=3)
+        glass.wash(cx + 20, bottom - 14, 32, 15, WATERCOLOR['blue'], alpha=220, layers=3)
+        glass.wash(cx, bottom - 24, 22, 12, WATERCOLOR['green'], alpha=220, layers=3)
+    sh.masked(glass, mask)
+
+    sh.stroke(half, 4.4)
     sh.stroke(mirror, 4.4)
-    sh.stroke([(cx - 11, neck + 1), (cx - 11, tube_top)], 3.6)
-    sh.stroke([(cx + 11, neck + 1), (cx + 11, tube_top)], 3.6)
-    # 유리 반짝임 (모래시계 아래 칸과 같은 자리)
-    sh.stroke(bezier((cx - 58, bottom - 24), (cx - 66, bottom - 52), (cx - 50, bottom - 80), (cx - 36, bottom - 96), 14),
-              3.4, WHITE, 230, amp=0.6)
-    sh.stroke([(cx - 5, tube_top + 6), (cx - 5, neck + 6)], 2.2, WHITE, 200, amp=0.3)
-    # 마개: 목보다 조금 넓은 나무 마개
-    cork = [(cx - 15, tube_top - 26), (cx + 15, tube_top - 26), (cx + 13, tube_top + 4), (cx - 13, tube_top + 4)]
-    sh.wash(cx, tube_top - 11, 15, 16, wood, alpha=245, layers=2, blur=1.2, wobble=0.05)
-    sh.wash(cx - 5, tube_top - 16, 4, 7, WHITE, alpha=120, layers=1, blur=1)
-    sh.stroke(cork + [cork[0]], 3.2, amp=0.4)
-    sh.stroke([(cx - 9, tube_top - 14), (cx + 9, tube_top - 12)], 1.6, SOFT_PLUM, 160, amp=0.3)
-    # 바닥 받침: 병 폭만큼
-    y0, y1 = bottom - 2, bottom + 20
-    sh.wash(cx, (y0 + y1) / 2, 88, 11, wood, alpha=240, layers=2, blur=2)
-    sh.wash(cx - 36, (y0 + y1) / 2 - 3, 36, 4, WHITE, alpha=120, layers=1, blur=2)
-    sh.stroke([(cx - 90, y0), (cx + 90, y0 + 1), (cx + 92, y1), (cx - 89, y1 - 1), (cx - 90, y0 - 2)], 4.2)
+    if kind == 'black':
+        sh.stroke(bezier((cx - 58, top + 22), (cx - 66, top + 60), (cx - 40, top + 92), (cx - 26, top + 104), 20),
+                  4, WHITE, 240, amp=0.6)
+    else:
+        sh.stroke(bezier((cx - 58, bottom - 30), (cx - 64, bottom - 50), (cx - 52, bottom - 70), (cx - 44, bottom - 80), 14),
+                  3, WHITE, 220, amp=0.6)
+
+    # 넓은 나무판: 검정은 위 뚜껑, 컬러는 아래 받침
+    y, d, wood = (top, -1, dark_wood) if kind == 'black' else (bottom, 1, PASTEL['peach'])
+    y0, y1 = (y - 26, y + 2) if d < 0 else (y - 2, y + 26)
+    sh.wash(cx, (y0 + y1) / 2, 94, 13, wood, alpha=240, layers=2, blur=2)
+    sh.wash(cx - 40, (y0 + y1) / 2 - 3, 40, 5, WHITE, alpha=120, layers=1, blur=2)
+    sh.stroke([(cx - 96, y0), (cx + 96, y0 + 1), (cx + 98, y1), (cx - 95, y1 - 1), (cx - 96, y0 - 2)], 4.2)
     for k in range(5):
-        xx = cx - 64 + k * 32
-        sh.stroke([(xx, y0 + 6), (xx + 9, y1 - 6)], 1.8, SOFT_PLUM, 160)
+        xx = cx - 70 + k * 35
+        sh.stroke([(xx, y0 + 7), (xx + 10, y1 - 7)], 1.8, pastel.SOFT_PLUM, 160)
+
+    # 목의 이음 고리 (두 병이 여기서 맞물린다)
+    rw, rh = 15, 7
+    sh.wash(cx, neck, rw, rh, dark_wood, alpha=235, layers=2, edge=0.3, blur=0.8, wobble=0.04)
+    sh.wash(cx - 6, neck - 3, 6, 1.5, WHITE, alpha=130, layers=1, blur=0.8)
+    sh.stroke([(cx - rw, neck - rh), (cx + rw, neck - rh + 0.5), (cx + rw + 0.5, neck + rh), (cx - rw, neck + rh - 0.5),
+               (cx - rw, neck - rh - 1)], 2.8)
     return sh.result(crop=True, margin=4)
 
 
 def black_bottle():
-    """검정 잉크통. 봉인 장소에서 찾는다."""
-    return flask('black')
+    """검정 잉크통 (모래시계 위 칸). 봉인 장소에서 찾는다."""
+    return half_bottle('black')
 
 
 def color_bottle():
-    """컬러 잉크통. 동굴에서 찾고, 남자가 가져간다."""
-    return flask('color')
+    """컬러 잉크통 (모래시계 아래 칸). 동굴에서 찾고, 남자가 가져간다."""
+    return half_bottle('color')
 
 
 # ================================================================ 동굴 안
