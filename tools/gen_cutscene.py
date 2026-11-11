@@ -298,29 +298,73 @@ def seal():
     return base.convert('RGB')
 
 
-def _split_halves():
-    """타이틀 모래시계(split_bottle)를 목 이음 고리에서 두 병으로 가른다 → (위 검정 잉크통, 아래 컬러 잉크통).
-    모래시계는 두 잉크통이 합쳐진 모습이고, 이야기에서는 따로 찾는다 (동굴: 컬러, 봉인 장소: 검정).
-    고리는 양쪽에 다 남긴다 (고리는 목보다 살짝 넓다: 목에서 위아래로 8px)."""
-    img = restore.split_bottle()
-    a = np.asarray(img)[..., 3] > 40
-    h = a.shape[0]
-    widths = a.sum(1)
-    mid = slice(h // 3, h * 2 // 3)
-    neck = h // 3 + int(np.argmin(widths[mid]))
-    top = img.crop((0, 0, img.width, neck + 8))
-    bottom = img.crop((0, neck - 8, img.width, h))
-    return top.crop(top.getbbox()), bottom.crop(bottom.getbbox())
+def flask(kind):
+    """잉크통 한 병 (kind: 'color' / 'black'). 모래시계는 이 두 병이 목을 맞대고 합쳐진 모습이다
+    (위가 거꾸로 선 검정, 아래가 컬러). 이야기에서는 따로 찾으므로 자르지 않고 한 병씩 그린다.
+    - 몸통: 타이틀 모래시계 아래 칸과 같은 둥근 유리 (gen_title_restore.split_bottle 의 lower 곡선)
+    - 짧은 유리 목 + 나무 마개 (컬러는 파스텔 나무, 검정은 모래시계 위 칸과 같은 먹빛 나무)
+    - 바닥 받침은 병 폭만큼만, 양옆 기둥은 없다"""
+    bw, bh = 220, 250
+    cx = bw / 2
+    sh = Sheet(bw, bh, seed=901 if kind == 'color' else 911)
+    sh.line = PLUM
+    neck, bottom = 58, 224          # 몸통이 시작되는 목 / 바닥
+    body = bezier((cx - 11, neck), (cx - 16, neck + 30), (cx - 88, bottom - 80), (cx - 80, bottom), 40)
+    mirror = [(2 * cx - x, y) for x, y in body]
+    tube_top = neck - 22
+    glass_pts = [(cx - 11, tube_top)] + body + mirror[::-1] + [(cx + 11, tube_top)]
+    inside = pastel.poly_mask((bw, bh), glass_pts)
+    wood = PASTEL['peach'] if kind == 'color' else (214, 186, 170)
+
+    g = Sheet(bw, bh, seed=sh.rng.randint(0, 9999))
+    g.wash(cx, (neck + bottom) / 2, 80, 90, (236, 240, 255), alpha=150, layers=2)   # 유리 빛
+    if kind == 'color':
+        g.wash(cx - 24, bottom - 18, 36, 18, WATERCOLOR['red'], alpha=225, layers=3)
+        g.wash(cx + 22, bottom - 16, 34, 17, WATERCOLOR['blue'], alpha=225, layers=3)
+        g.wash(cx, bottom - 28, 24, 14, WATERCOLOR['green'], alpha=225, layers=3)
+    else:
+        surf = bottom - 62   # 바닥에 고인 검정 잉크 (수면이 살짝 출렁)
+        pool = [(x, surf + 3 * math.sin(x / 9) + 2 * math.sin(x / 4 + 1)) for x in range(0, bw + 1, 4)]
+        ink = Sheet(bw, bh, seed=912)
+        ink.fill_poly([(0, 0), (bw, 0), (bw, bh), (0, bh)], INK, 250)
+        ink.wash(cx + 22, bottom - 30, 30, 20, (78, 62, 102), alpha=150, layers=3, blur=4)   # 보랏빛 먹 번짐
+        ink.wash(cx - 26, surf + 8, 26, 6, (120, 112, 138), alpha=170, layers=2, blur=2)      # 수면 윤기
+        g.masked(ink, pastel.poly_mask((bw, bh), pool + [(bw, bh), (0, bh)]))
+    sh.masked(g, inside)
+
+    sh.stroke(body, 4.4)
+    sh.stroke(mirror, 4.4)
+    sh.stroke([(cx - 11, neck + 1), (cx - 11, tube_top)], 3.6)
+    sh.stroke([(cx + 11, neck + 1), (cx + 11, tube_top)], 3.6)
+    # 유리 반짝임 (모래시계 아래 칸과 같은 자리)
+    sh.stroke(bezier((cx - 58, bottom - 24), (cx - 66, bottom - 52), (cx - 50, bottom - 80), (cx - 36, bottom - 96), 14),
+              3.4, WHITE, 230, amp=0.6)
+    sh.stroke([(cx - 5, tube_top + 6), (cx - 5, neck + 6)], 2.2, WHITE, 200, amp=0.3)
+    # 마개: 목보다 조금 넓은 나무 마개
+    cork = [(cx - 15, tube_top - 26), (cx + 15, tube_top - 26), (cx + 13, tube_top + 4), (cx - 13, tube_top + 4)]
+    sh.wash(cx, tube_top - 11, 15, 16, wood, alpha=245, layers=2, blur=1.2, wobble=0.05)
+    sh.wash(cx - 5, tube_top - 16, 4, 7, WHITE, alpha=120, layers=1, blur=1)
+    sh.stroke(cork + [cork[0]], 3.2, amp=0.4)
+    sh.stroke([(cx - 9, tube_top - 14), (cx + 9, tube_top - 12)], 1.6, SOFT_PLUM, 160, amp=0.3)
+    # 바닥 받침: 병 폭만큼
+    y0, y1 = bottom - 2, bottom + 20
+    sh.wash(cx, (y0 + y1) / 2, 88, 11, wood, alpha=240, layers=2, blur=2)
+    sh.wash(cx - 36, (y0 + y1) / 2 - 3, 36, 4, WHITE, alpha=120, layers=1, blur=2)
+    sh.stroke([(cx - 90, y0), (cx + 90, y0 + 1), (cx + 92, y1), (cx - 89, y1 - 1), (cx - 90, y0 - 2)], 4.2)
+    for k in range(5):
+        xx = cx - 64 + k * 32
+        sh.stroke([(xx, y0 + 6), (xx + 9, y1 - 6)], 1.8, SOFT_PLUM, 160)
+    return sh.result(crop=True, margin=4)
 
 
 def black_bottle():
-    """검정 잉크통 (모래시계 위 칸)."""
-    return _split_halves()[0]
+    """검정 잉크통. 봉인 장소에서 찾는다."""
+    return flask('black')
 
 
 def color_bottle():
-    """컬러 잉크통 (모래시계 아래 칸). 동굴에서 찾고, 남자가 가져간다."""
-    return _split_halves()[1]
+    """컬러 잉크통. 동굴에서 찾고, 남자가 가져간다."""
+    return flask('color')
 
 
 # ================================================================ 동굴 안

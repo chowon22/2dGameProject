@@ -41,7 +41,7 @@ HINT = (250, 246, 255)
 # 컬러 잉크통 자리: 동굴 안 바위 위에 떠 있다 (물들이기가 시작되는 곳 gen_title_pastel.DYE_FROM 바로 아래).
 # 모래시계는 검정·컬러 두 잉크통이 합쳐진 모습이고, 동굴에서 찾는 건 아래 칸 컬러 잉크통 하나다
 BOTTLE = (CX, 245)
-BOTTLE_SCALE = 0.75
+BOTTLE_SCALE = 0.52
 COLORS = ('red', 'green', 'blue')
 
 
@@ -389,7 +389,7 @@ class NightCut(Cut):
         # 잉크통: 동굴 안에 떠 있다가 둘째 문장에서 남자 손으로 날아간다
         grab = 0.0 if self.step == 0 else ease_in_out((self.st - 0.6) / 0.8)
         hx, hy = self.hand(x, y)
-        bs = 0.45
+        bs = 0.38
         bx = BOTTLE[0] + (hx - BOTTLE[0]) * grab
         by = BOTTLE[1] + (hy + bottle.h * bs / 2 - BOTTLE[1]) * grab
         scale = BOTTLE_SCALE + (bs - BOTTLE_SCALE) * grab
@@ -455,7 +455,7 @@ class SealCut(Cut):
              '소년은 오래된 검정 잉크통을 찾았어요.',
              '검정은 색 있는 것에 닿으면, 그 색을 빨아들였어요.')
     PEDESTAL = 250          # 제단 윗면 (gen_cutscene.seal, PIL 470)
-    SCALE = 0.6
+    SCALE = 0.56
 
     def __init__(self):
         super().__init__()
@@ -464,7 +464,7 @@ class SealCut(Cut):
 
     def mouth(self):
         """잉크통 아가리 (색이 빨려 들어가는 곳)."""
-        return CX, self.PEDESTAL + black_bottle.h * self.SCALE * 0.75
+        return CX, self.PEDESTAL + black_bottle.h * self.SCALE * 0.9
 
     def on_step(self, step):
         if step == 1:
