@@ -1,18 +1,19 @@
 """스토리 컷씬: 새 여정을 시작하면 준비 화면 전에 한 번 보여 주는 도입 이야기 (PRD 2.4 스토리 흐름, 10장 P2 스토리 컷).
 
-동화책을 한 장씩 넘기듯 여섯 컷이 이어지고, 컷마다 아래 쪽지에 한 문장씩 손글씨가 써진다.
-1. 흑백 동굴에서 소년이 컬러 잉크통을 발견한다 → 잉크통에서부터 세상에 색이 번진다
-2. 잉크통으로 불도 피우고 얼음도 만들며 즐겁게 지낸다
-3. 소년이 잠든 밤, 긴 외투의 남자가 잉크통을 가져간다
-4. 아침, 세상의 색이 빠져나가고 색을 담아 나르는 운반자 몬스터들이 날아다닌다
-5. 봉인 장소에서 검정 잉크통을 찾는다. 검정은 색을 빨아들인다
-6. 검정 잉크통을 안고 흑백 들판을 달려 여정을 떠난다
+동화책을 한 장씩 넘기듯 일곱 컷이 이어지고, 컷마다 아래 쪽지에 한 문장씩 손글씨가 써진다.
+1. 숲속 흑백 동굴 앞에 온 소년이 동굴 안으로 들어간다
+2. 동굴 안에서 컬러 잉크통을 발견한다 → 잉크통에서부터 동굴에 색이 번진다
+3. 잉크통으로 불도 피우고 얼음도 만들며 즐겁게 지낸다
+4. 소년이 잠든 밤, 긴 외투의 남자가 잉크통을 가져간다
+5. 아침, 세상의 색이 빠져나가고 색을 담아 나르는 운반자 몬스터들이 날아다닌다
+6. 봉인 장소에서 검정 잉크통을 찾는다. 검정은 색을 빨아들인다
+7. 검정 잉크통을 안고 흑백 들판을 달려 여정을 떠난다
 
 - 클릭 / Space / Enter: 글씨가 써지는 중이면 다 쓰고, 다 써졌으면 다음 문장·다음 컷
 - ESC: 건너뛰기
 - 끝나면(건너뛰어도) 세이브에 본 것으로 적고 준비 화면으로 (로딩 화면 대신 컷씬이 준비 화면 이미지를 미리 읽는다)
 
-배경 동굴(낮·밤)과 컬러 잉크통은 타이틀 그림, 소년은 준비 화면 달리기 스프라이트, 나머지는 tools/gen_cutscene.py.
+바깥 동굴(낮·밤)과 컬러 잉크통은 타이틀 그림, 동굴 안은 image/cutscene_inside, 소년은 준비 화면 달리기 스프라이트, 나머지는 tools/gen_cutscene.py.
 """
 import math
 import random
@@ -92,18 +93,19 @@ def dye_frames(folder):
     return [image(folder, f'dye_{i}.png') for i in range(10)]
 
 
-def draw_boy(t, x, ground=GROUND, frame=None, flip=False, lift=0.0):
-    """준비 화면 달리기 스프라이트 (1:1). frame 을 주지 않으면 달린다."""
+def draw_boy(t, x, ground=GROUND, frame=None, flip=False, lift=0.0, scale=1.0, alpha=1.0):
+    """준비 화면 달리기 스프라이트 (평소엔 1:1). frame 을 주지 않으면 달린다.
+    scale·alpha: 동굴 안으로 들어가며 작아지고 흐려질 때."""
     if frame is None:
         frame = int(t * prepare_mode.RUN_FPS) % prepare_mode.RUN_FRAMES
-    s = 1 - min(0.3, lift / 60)
-    shadow.draw(x + 2, ground - 2, shadow.w * 0.55 * s, shadow.h * 0.6 * s)
+    s = (1 - min(0.3, lift / 60)) * scale
+    draw_alpha(shadow, alpha, x + 2, ground - 2, shadow.w * 0.55 * s, shadow.h * 0.6 * s)
     img = boys[frame]
-    y = ground - 4 + prepare_mode.BOY_FEET + lift
-    if flip:
-        img.composite_draw(0, 'h', round(x), round(y), img.w, img.h)
-    else:
+    y = ground - 4 + (prepare_mode.BOY_FEET + lift) * scale
+    if scale == 1.0 and alpha >= 1 and not flip:
         img.draw(round(x), round(y))
+    else:
+        draw_alpha(img, alpha, round(x), round(y), img.w * scale, img.h * scale, flip='h' if flip else '')
 
 
 def draw_bottle(t, x, y, scale=BOTTLE_SCALE, glow=0.6, float_k=1.0):
@@ -211,45 +213,84 @@ class Cut:
 
 
 class CaveCut(Cut):
-    """1. 흑백 동굴로 소년이 달려와, 잉크통을 찾자 잉크통에서부터 세상에 색이 번진다."""
+    """1. 숲속 흑백 동굴 앞까지 달려와 갸웃하다가, 동굴 입구로 들어간다 (작아지고 흐려지며 안쪽으로)."""
     lines = ('숲속 깊은 곳, 모든 것이 흑백인 신기한 동굴이 있었어요.',
-             '소년은 그곳에서 반짝이는 컬러 잉크통을 발견했어요.')
+             '호기심 많은 소년은 동굴 안으로 들어가 보았어요.')
     ARRIVE = 2.4
     STOP_X = 400
+    MOUTH = (CX, GROUND + 26)   # 동굴 입구 안쪽 (발이 닿는 곳이 조금 높아져 깊어 보인다)
+    ENTER = 1.8
+
+    def __init__(self):
+        super().__init__()
+        self.from_x = self.STOP_X
+
+    def on_step(self, step):
+        if step == 1:
+            self.from_x = self.arrive_x()
+
+    def arrive_x(self):
+        return -90 + (self.STOP_X + 90) * ease_out(self.t / self.ARRIVE) ** 0.8
+
+    def draw(self):
+        bg_gray.draw(CX, H / 2)
+        if self.step == 0:
+            x = self.arrive_x()
+            running = self.t < self.ARRIVE * 0.92
+            draw_boy(self.t, x, frame=None if running else 1)
+            if not running:   # 머리 위 물음표
+                s = pop((self.t - self.ARRIVE * 0.92) / 0.35)
+                text.draw('?', x + 18, GROUND + 205, 56, INK, 'c', scale=s)
+        else:
+            k = ease_in_out(self.st / self.ENTER)
+            x = self.from_x + (self.MOUTH[0] - self.from_x) * k
+            ground = GROUND + (self.MOUTH[1] - GROUND) * k
+            alpha = 1 - clamp01((k - 0.55) / 0.45)
+            draw_boy(self.t, x, ground, scale=1 - 0.45 * k, alpha=alpha)
+        self.draw_effects()
+
+
+class InsideCut(Cut):
+    """2. 흑백 동굴 안쪽 바위 위에 잉크통이 빛난다. 소년이 찾아내자 잉크통에서부터 동굴에 색이 번진다."""
+    lines = ('동굴 안쪽에서, 소년은 반짝이는 컬러 잉크통을 발견했어요.',
+             '잉크통이 반짝 빛나자, 흑백이던 동굴에 색이 번져 나갔어요.')
+    ARRIVE = 2.2
+    STOP_X = 380
     DYE_TIME = 3.2
 
     def __init__(self):
         super().__init__()
-        self.found = None   # 발견한 시각 (self.t)
+        self.found = None   # 색이 번지기 시작한 시각 (self.t)
 
     def on_step(self, step):
         if step == 1:
             self.found = self.t
-            self.effects += burst(*BOTTLE, 12, speed=(80, 200))
+            self.effects += burst(*BOTTLE, 14, speed=(80, 220))
 
     def boy_x(self):
         return -90 + (self.STOP_X + 90) * ease_out(self.t / self.ARRIVE) ** 0.8
 
     def draw(self):
-        bg_gray.draw(CX, H / 2)
+        inside_gray.draw(CX, H / 2)
         ft = None if self.found is None else self.t - self.found
         if ft is not None:
-            draw_dye(dye_day, ft / self.DYE_TIME)
-        glow = 0.35 if ft is None else 0.35 + 0.35 * ease_out(ft / 0.8)
+            draw_dye(dye_inside, ft / self.DYE_TIME)
+        glow = 0.45 if ft is None else 0.45 + 0.4 * ease_out(ft / 0.8)
         draw_bottle(self.t, *BOTTLE, glow=glow)
-        running = self.t < self.ARRIVE * 0.92
+        stop = self.ARRIVE * 0.92
+        running = self.t < stop
         lift = 0.0
         if ft is not None and ft < 1.3:
             lift = abs(math.sin(ft * math.pi / 0.43)) * 18   # 신이 나서 콩콩 뛴다
-        draw_boy(self.t, self.boy_x(), frame=None if running else 1, lift=lift)
-        if ft is not None:   # 머리 위 느낌표
-            s = pop(ft / 0.35)
-            text.draw('!', self.boy_x() + 18, GROUND + 205 + lift, 56, INK, 'c', scale=s)
+        x = self.boy_x()
+        draw_boy(self.t, x, frame=None if running else 1, lift=lift)
+        if not running:   # 잉크통을 보고 느낌표
+            text.draw('!', x + 18, GROUND + 205 + lift, 56, INK, 'c', scale=pop((self.t - stop) / 0.35))
         self.draw_effects()
 
 
 class PlayCut(Cut):
-    """2. 색을 되찾은 동굴 앞에서 불도 피우고 얼음도 만들며 뛰논다."""
+    """3. 잉크통을 들고 나와, 색을 되찾은 동굴 앞에서 불도 피우고 얼음도 만들며 뛰논다."""
     lines = ('잉크통의 색으로 불도 피우고, 얼음도 만들고.',
              '소년은 하루하루가 즐거웠어요.')
     LEFT, RIGHT = 400, 880
@@ -298,7 +339,7 @@ class PlayCut(Cut):
 
 
 class NightCut(Cut):
-    """3. 소년이 잠든 밤, 긴 외투의 남자가 몰래 다가와 잉크통을 가져간다."""
+    """4. 소년이 잠든 밤, 긴 외투의 남자가 몰래 다가와 잉크통을 가져간다."""
     lines = ('그러던 어느 밤, 소년이 잠든 사이…',
              '긴 외투를 입은 남자가 몰래 잉크통을 가져가 버렸어요.')
     SLEEPER_X = 230
@@ -362,7 +403,7 @@ class NightCut(Cut):
 
 
 class DrainCut(Cut):
-    """4. 아침, 세상의 색이 빠져나가고 운반자 몬스터들이 색을 몸에 담아 날아다닌다."""
+    """5. 아침, 세상의 색이 빠져나가고 운반자 몬스터들이 색을 몸에 담아 날아다닌다."""
     lines = ('아침이 되자, 세상의 색이 빠져나가고 있었어요.',
              '색을 몸에 담아 나르는 몬스터들이 날아다녔어요.')
     DRAIN = (0.6, 5.5)      # 색이 빠지기 시작하는 때, 다 빠질 때
@@ -407,7 +448,7 @@ class DrainCut(Cut):
 
 
 class SealCut(Cut):
-    """5. 봉인 장소에서 검정 잉크통을 찾는다. 검정은 색을 빨아들인다."""
+    """6. 봉인 장소에서 검정 잉크통을 찾는다. 검정은 색을 빨아들인다."""
     lines = ('망연자실해 찾아간 봉인 장소에서,',
              '소년은 오래된 검정 잉크통을 찾았어요.',
              '검정은 색 있는 것에 닿으면, 그 색을 빨아들였어요.')
@@ -453,7 +494,7 @@ class SealCut(Cut):
 
 
 class DepartCut(Cut):
-    """6. 검정 잉크통을 안고 색을 빼앗긴 흑백 들판을 달려 여정을 떠난다."""
+    """7. 검정 잉크통을 안고 색을 빼앗긴 흑백 들판을 달려 여정을 떠난다."""
     lines = ('이 검정이라면, 빼앗긴 색을 되찾을 수 있을지도 몰라.',
              '소년은 검정 잉크통을 안고 길을 떠났어요.')
     GROUND = prepare_mode.GROUND
@@ -476,13 +517,13 @@ class DepartCut(Cut):
         self.draw_effects()
 
 
-CUTS = (CaveCut, PlayCut, NightCut, DrainCut, SealCut, DepartCut)
+CUTS = (CaveCut, InsideCut, PlayCut, NightCut, DrainCut, SealCut, DepartCut)
 
 # ---------------------------------------------------------------- 모드
 fade = caption = next_mark = sparkle = shadow = None
-bottle = bottle_glow = bg_gray = bg_night = fire = ice = man_img = sleeper = seal_bg = black_bottle = None
+bottle = bottle_glow = bg_gray = bg_night = inside_gray = fire = ice = man_img = sleeper = seal_bg = black_bottle = None
 boys = []
-dye_day = dye_night = []
+dye_day = dye_night = dye_inside = []
 carriers = {}
 run_layers = {}
 cut = None
@@ -495,7 +536,7 @@ skipping = False
 
 def load_images():
     global fade, caption, next_mark, sparkle, shadow, bottle, bottle_glow, bg_gray, bg_night, fire, ice, man_img
-    global sleeper, seal_bg, black_bottle, boys, dye_day, dye_night, carriers, run_layers
+    global inside_gray, dye_inside, sleeper, seal_bg, black_bottle, boys, dye_day, dye_night, carriers, run_layers
     fade = image('common', 'fade.png')
     caption = image('cutscene', 'caption.png')
     next_mark = image('common', 'ink_drop_blue.png')
@@ -508,6 +549,8 @@ def load_images():
     bg_night = image('title_restore_night', 'background.png')
     dye_day = dye_frames('title_restore')
     dye_night = dye_frames('title_restore_night')
+    inside_gray = image('cutscene_inside', 'background.png')
+    dye_inside = dye_frames('cutscene_inside')
     fire = image('cutscene', 'fire.png')
     ice = image('cutscene', 'ice.png')
     man_img = image('cutscene', 'man.png')
