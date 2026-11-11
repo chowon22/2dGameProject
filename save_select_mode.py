@@ -40,13 +40,16 @@ def refresh():
 
 
 def choose(slot):
-    """빈 슬롯이면 새 게임, 있으면 이어하기. 그다음 준비 화면으로."""
+    """빈 슬롯이면 새 게임, 있으면 이어하기. 그다음 준비 화면으로 (도입 이야기를 아직 안 봤으면 컷씬부터)."""
     if save_data.exists(slot):
         save_data.continue_game(slot)
     else:
         save_data.new_game(slot)
     game_framework.pop_mode()     # 이 창을 닫고
-    title_mode.enter_game()       # 타이틀 → 준비 화면
+    if save_data.current['intro_seen']:
+        title_mode.enter_game()   # 타이틀 → 로딩 → 준비 화면
+    else:
+        title_mode.enter_story()  # 타이틀 → 컷씬 → 준비 화면
 
 
 def ask_delete(slot):
