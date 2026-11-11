@@ -3,12 +3,13 @@
 배경 동굴(낮·밤)과 컬러 모래시계 잉크통은 타이틀 그림(title_restore, title_restore_night)을 그대로 쓰고,
 여기서는 컷씬에만 나오는 것을 그린다 (PRD 2.4 스토리 흐름).
 
-- fire.png / ice.png: 잉크통으로 피운 불, 만든 얼음 (컷 2)
-- man.png: 긴 외투에 챙 넓은 모자를 쓴 남자 실루엣 (컷 3)
-- sleeper.png: 이불을 덮고 잠든 소년 (컷 3)
-- carrier_red/green/blue.png: 색을 몸에 담아 나르는 운반자 몬스터 (컷 4)
-- seal.png: 봉인 장소 (컷 5), black_bottle.png: 검정 잉크통 (모래시계 위 칸, 타이틀 split_bottle 과 같은 그림)
-- run_sky/far/mid/ground.png: 색을 빼앗긴 흑백 들판 (컷 6, 준비 화면 층을 흑백으로)
+- cutscene_inside/background.png, dye_0..9.png: 동굴 안 (흑백 + 잉크통에서부터 번지는 색 층)
+- fire.png / ice.png: 잉크통으로 피운 불, 만든 얼음
+- man.png: 긴 외투에 챙 넓은 모자를 쓴 남자 실루엣 
+- sleeper.png: 이불을 덮고 잠든 소년 
+- carrier_red/green/blue.png: 색을 몸에 담아 나르는 운반자 몬스터 
+- seal.png: 봉인 장소 , black_bottle.png: 검정 잉크통 (모래시계 위 칸, 타이틀 split_bottle 과 같은 그림)
+- run_sky/far/mid/ground.png: 색을 빼앗긴 흑백 들판 (준비 화면 층을 흑백으로)
 - caption.png: 자막 쪽지
 
 실행:  python tools/gen_cutscene.py
@@ -309,6 +310,136 @@ def black_bottle():
     return out.crop(out.getbbox())
 
 
+# ================================================================ 동굴 안
+INSIDE_GROUND = 585     # 동굴 안 바닥 (PIL y). 바깥 배경 땅과 같은 높이라 소년이 같은 자리를 밟는다
+INSIDE_ROCK_TOP = 552   # 잉크통을 올려 둔 바위 윗면 (PIL y). 잉크통은 그 위 물들이기 자리 (DYE_FROM) 에 떠 있다
+
+
+def crystal_cluster(sh, x, base, size, tint, seed):
+    """바닥이나 벽에서 솟은 수정 무리."""
+    rng = sh.rng
+    shards = sorted(((rng.uniform(-0.6, 0.6), rng.uniform(0.55, 1.0)) for _ in range(rng.randint(3, 5))),
+                    key=lambda s: -abs(s[0]))
+    for i, (a, k) in enumerate(shards):
+        ln, hw = size * k, size * 0.2 * (0.7 + k * 0.5)
+        dx, dy = math.sin(a), -math.cos(a)
+        px, py = -dy, dx
+        x0 = x + a * size * 0.5
+        tip = (x0 + dx * ln, base + dy * ln)
+        pts = [(x0 - px * hw, base - py * hw), (x0 - px * hw + dx * ln * 0.72, base + dy * ln * 0.72 - py * hw),
+               tip, (x0 + px * hw + dx * ln * 0.72, base + dy * ln * 0.72 + py * hw), (x0 + px * hw, base + py * hw)]
+        filled(sh, pts, tint, 235, WHITE, seed + i, width=3.4)
+        sh.stroke([(x0, base - 2), (tip[0] * 0.9 + x0 * 0.1, tip[1] * 0.9 + base * 0.1)], 1.6, WHITE, 190, amp=0.3)
+    sh.wash(x, base - size * 0.4, size * 0.9, size * 0.7, tint, alpha=60, layers=2, blur=10)   # 수정 빛
+
+
+def cave_inside():
+    """동굴 안쪽 (컬러). 둥근 바위 천장과 벽이 화면을 감싸고, 안쪽엔 파스텔 수정이 빛나고,
+    가운데 납작한 바위 위에서 잉크통 빛이 퍼진다. 흑백 배경·물들이기 층은 이것으로 만든다."""
+    G = INSIDE_GROUND
+    ys = np.linspace(0, 1, H)
+    stops = [(0.0, (150, 130, 196)), (0.45, (196, 176, 226)), (G / H, (232, 212, 232)),
+             (G / H + 0.001, (214, 200, 230)), (1.0, (196, 184, 220))]
+    col = np.zeros((H, 3), np.float32)
+    for c in range(3):
+        col[:, c] = np.interp(ys, [s[0] for s in stops], [s[1][c] for s in stops])
+    grain = np.asarray(paper(W, H, seed=7).convert('RGB'), np.float32) / np.array((247, 244, 237), np.float32)
+    base = Image.fromarray(np.clip(np.repeat(col[:, None, :], W, axis=1) * grain, 0, 255).astype(np.uint8)).convert('RGBA')
+
+    sh = Sheet(W, H, seed=871)
+    sh.line = PLUM
+    cx = W / 2
+    bx, by = pastel.DYE_FROM   # 잉크통 자리
+
+    # 안쪽 벽: 울퉁불퉁한 바위 턱 두 겹 (뒤 턱은 옅게, 앞 턱은 조금 짙게)
+    for k, (tint, top, alpha) in enumerate(((PASTEL['lavender'], 330, 120), ((176, 152, 206), 430, 140))):
+        line = [(x, top + 26 * math.sin(x / (90 + k * 40) + k * 2) + 14 * math.sin(x / 31 + k))
+                for x in range(-20, W + 40, 14)]
+        line = bg.lumpy(line, 18, sh.rng, 0.35)
+        m = bg.poly_mask((W, H), line + [(W + 40, G + 4), (-20, G + 4)])
+        f = Sheet(W, H, seed=872 + k)
+        for x in range(0, W + 160, 160):
+            f.wash(x, top + 100, 150, 130, tint, alpha=alpha, layers=2, blur=8)
+        sh.masked(f, m)
+        sh.stroke(line, 2.6, SOFT_PLUM, 170, amp=1.2)
+        for _ in range(7):   # 바위 금
+            x = sh.rng.uniform(40, W - 40)
+            y = top + sh.rng.uniform(40, 110)
+            sh.stroke([(x, y), (x + 10, y + 14), (x + 4, y + 30)], 2.2, SOFT_PLUM, 140)
+    # 들어온 쪽(왼쪽)에서 비치는 바깥 빛
+    sh.wash(60, 420, 200, 260, (255, 240, 214), alpha=110, layers=3, blur=16)
+
+    # 잉크통 빛
+    sh.wash(bx, by, 300, 230, (255, 246, 214), alpha=90, layers=3, blur=16)
+    sh.wash(bx, by, 150, 130, PASTEL['mint'], alpha=80, layers=3, blur=10)
+    sh.wash(bx, by + 10, 80, 80, (255, 252, 236), alpha=140, layers=3, blur=8)
+
+    # 안쪽 수정 무리
+    for x, size, tint in ((250, 70, PASTEL['mint']), (420, 46, PASTEL['sky']), (900, 56, PASTEL['pink']),
+                          (1060, 80, PASTEL['sky']), (1170, 44, PASTEL['lavender'])):
+        crystal_cluster(sh, x, G - 4, size, tint, 880 + int(x))
+
+    # 바닥
+    floor = [(x, G + 3 * math.sin(x / 41) + 2 * math.sin(x / 13)) for x in range(-10, W + 20, 16)]
+    sh.wash(cx, G + 60, W * 0.5, 50, PASTEL['lavender'], alpha=90, layers=3, blur=8)
+    sh.wash(bx, G + 30, 240, 36, PASTEL['lemon'], alpha=120, layers=3, blur=8)    # 잉크통 빛이 바닥에 비침
+    sh.stroke(floor, 4.2, amp=1.6)
+    for x in range(30, W, 52):
+        if abs(x - cx) < 200:
+            continue
+        y = G + 30 + (x * 7) % 60
+        sh.stroke([(x, y), (x + 14, y + 1)], 2.2, SOFT_PLUM, 140)
+    for x, y, rx, tint in ((330, G + 8, 26, PASTEL['lavender']), (980, G + 10, 32, PASTEL['pink']),
+                           (180, G + 70, 20, PASTEL['sky']), (1120, G + 90, 24, PASTEL['peach'])):
+        bg.rock(sh, x, y, rx, rx * 0.6, tint)
+
+    # 잉크통을 올려 둔 납작한 바위
+    top = INSIDE_ROCK_TOP
+    stone = bezier((bx - 110, G + 4), (bx - 120, top + 6), (bx - 60, top - 4), (bx, top - 2), 24) + \
+        bezier((bx, top - 2), (bx + 70, top), (bx + 122, top + 8), (bx + 108, G + 4), 24)[1:]
+    stone = bg.lumpy(stone, 4, sh.rng, 0.2)
+    f = Sheet(W, H, seed=876)
+    f.fill_poly(stone, PASTEL['lavender'], 230)
+    f.wash(bx - 30, top + 10, 70, 16, (255, 246, 220), alpha=200, layers=2, blur=4)   # 윗면에 비친 빛
+    f.wash(bx + 50, G - 6, 60, 14, (150, 128, 186), alpha=120, layers=2, blur=4)
+    sh.masked(f, bg.poly_mask((W, H), stone))
+    sh.stroke(stone, 4.2)
+    sh.stroke([(bx - 70, top + 14), (bx + 40, top + 16)], 2.0, SOFT_PLUM, 150)
+
+    # 천장과 양옆 벽: 바닥까지 내려와 화면을 감싸는 짙은 바위 (밖에서 본 입구가 아니라 안에 들어온 느낌)
+    hole = bezier((70, G + 10), (40, 330), (150, 80), (cx - 60, 70), 50) + \
+        bezier((cx - 60, 70), (cx + 240, 64), (W - 110, 110), (W - 80, G + 10), 50)[1:]
+    hole = bg.lumpy(hole, 22, sh.rng, 0.12)
+    frame = hole + [(W + 60, G + 10), (W + 60, -40), (-60, -40), (-60, G + 10)]
+    rock_col = (148, 122, 176)
+    f = Sheet(W, H, seed=877)
+    f.fill_poly(frame, rock_col, 255)
+    f.wash(90, 260, 160, 320, (122, 98, 152), alpha=200, layers=3, blur=10)       # 벽 그늘
+    f.wash(W - 80, 300, 160, 320, (122, 98, 152), alpha=200, layers=3, blur=10)
+    f.wash(cx, 20, 420, 60, (176, 150, 200), alpha=170, layers=3, blur=8)
+    f.wash(70, 470, 80, 120, (255, 226, 214), alpha=110, layers=2, blur=10)        # 들어온 쪽 빛이 벽에
+    for _ in range(10):
+        f.wash(f.rng.uniform(0, W), f.rng.uniform(0, 140), 60, 30, PASTEL['pink'], alpha=70, layers=2, blur=6)
+    sh.masked(f, bg.poly_mask((W, H), frame))
+    sh.stroke(hole, 5)
+    for x0, y0, x1, y1 in ((20, 300, 52, 340), (110, 100, 150, 130), (900, 18, 940, 44), (W - 50, 260, W - 20, 310),
+                           (30, 480, 50, 530), (W - 40, 470, W - 20, 520), (400, 20, 440, 40)):
+        sh.stroke([(x0, y0), ((x0 + x1) / 2 + 6, (y0 + y1) / 2), (x1, y1)], 2.8, PLUM, 200)
+    # 천장에서 내려온 종유석 (구멍 윤곽 바로 아래)
+    for x, ln in ((280, 54), (360, 30), (520, 44), (700, 62), (780, 34), (930, 48), (1060, 30)):
+        ty = min(p[1] for p in hole if abs(p[0] - x) < 12) - 4
+        pts = [(x - 14, ty), (x - 3, ty + ln), (x + 3, ty + ln), (x + 14, ty)]
+        filled(sh, pts, rock_col, 250, (200, 180, 220), 890 + x, width=3.4)
+
+    # 반짝이 (수정·잉크통 둘레)
+    for _ in range(16):
+        a = sh.rng.uniform(0, 2 * math.pi)
+        d = sh.rng.uniform(90, 230)
+        bg.sparkle_stroke(sh, bx + math.cos(a) * d, by + math.sin(a) * d * 0.6, sh.rng.uniform(4, 8), WHITE, 220)
+    base.alpha_composite(sh.result())
+    return base.convert('RGB')
+
+
 # ================================================================ 컷 6: 흑백 들판
 def gray_layer(name):
     """준비 화면 층을 색을 빼앗긴 흑백으로 (투명도는 그대로). gray_background 와 같은 밝기 매기기."""
@@ -346,6 +477,14 @@ def main():
     save(sleeper(), 'sleeper.png')
     for i, (name, col) in enumerate(WATERCOLOR.items()):
         save(carrier(col, 860 + i * 10), f'carrier_{name}.png')
+    # 동굴 안: 흑백 배경 + 잉크통에서부터 번지는 물들이기 층 (타이틀과 같은 방식, image/cutscene_inside)
+    inside = cave_inside()
+    out = os.path.join(ROOT, 'image', 'cutscene_inside')
+    os.makedirs(out, exist_ok=True)
+    pastel.gray_background(inside).save(os.path.join(out, 'background.png'))
+    for i, f in enumerate(pastel.dye_frames(inside)):
+        f.save(os.path.join(out, f'dye_{i}.png'))
+    print('saved cutscene_inside/background.png, dye_0..9.png')
     save(seal(), 'seal.png')
     save(black_bottle(), 'black_bottle.png')
     for name in ('sky', 'far', 'mid', 'ground'):
