@@ -303,18 +303,17 @@ def half_bottle(kind):
     모래시계는 검정·컬러 두 잉크통이 목의 이음 고리에서 합쳐진 모습이고, 이야기에서는 따로 찾는다
     (동굴: 컬러, 봉인 장소: 검정). 잘라 쓰지 않고 같은 곡선·나무판·이음 고리로 그 반쪽만 그린다.
     양옆 기둥은 두 병을 이어 주는 틀이라 뺀다.
-    - 컬러: 이음 고리(위) → 둥근 유리 → 넓은 파스텔 나무판(아래), 바닥에 모인 빨강·초록·파랑
-    - 검정: 넓은 먹빛 나무판(위) → 유리 → 이음 고리(아래), 위 칸을 채운 검정 잉크"""
+    두 병은 모양이 같고, 모래시계에서는 검정 병이 거꾸로 뒤집혀 컬러 병 위에 끼워져 있다.
+    따로 놓일 땐 둘 다 바로 선다: 이음 고리(위) → 둥근 유리 → 넓은 나무판 받침(아래).
+    - 컬러: 파스텔 나무, 바닥에 모인 빨강·초록·파랑
+    - 검정: 먹빛 나무, 바닥에 고인 검정 잉크 (모래시계에서 나무판 쪽에 차 있던 그 잉크)"""
     bw, bh = 240, 320
     cx = bw / 2
     sh = Sheet(bw, bh, seed=41)
     sh.line = PLUM
     top, bottom = 46, 274
     neck = (top + bottom) / 2
-    if kind == 'black':
-        half = bezier((cx - 78, top), (cx - 86, top + 80), (cx - 14, neck - 30), (cx - 9, neck), 40)
-    else:
-        half = bezier((cx - 9, neck), (cx - 14, neck + 30), (cx - 86, bottom - 80), (cx - 78, bottom), 40)
+    half = bezier((cx - 9, neck), (cx - 14, neck + 30), (cx - 86, bottom - 80), (cx - 78, bottom), 40)
     mirror = [(2 * cx - x, y) for x, y in half]
     mask = pastel.poly_mask((bw, bh), half + mirror[::-1])
     dark_wood = (214, 186, 170)   # 검정 잉크통 쪽 나무 (split_bottle 과 같은 색)
@@ -322,14 +321,13 @@ def half_bottle(kind):
     glass = Sheet(bw, bh, seed=42)
     glass.wash(cx, neck, 80, 130, (236, 240, 255), alpha=150, layers=2)
     if kind == 'black':
-        surf = top + 40
+        surf = bottom - 66   # 바닥에 고인 잉크의 수면 (살짝 출렁)
         pool = [(x, surf + 3 * math.sin(x / 9) + 2 * math.sin(x / 4 + 1)) for x in range(0, bw + 1, 4)]
         ink = Sheet(bw, bh, seed=44)
         ink.fill_poly([(0, 0), (bw, 0), (bw, bh), (0, bh)], INK, 250)
-        ink.wash(cx + 22, surf + 34, 30, 22, (78, 62, 102), alpha=150, layers=3, blur=4)
-        ink.wash(cx - 30, surf + 8, 24, 6, (120, 112, 138), alpha=170, layers=2, blur=2)
-        glass.masked(ink, pastel.poly_mask((bw, bh), pool + [(bw, neck + 6), (0, neck + 6)]))
-        glass.wash(cx, top + 30, 60, 22, WHITE, alpha=130, layers=2, blur=4)
+        ink.wash(cx + 22, bottom - 24, 30, 18, (78, 62, 102), alpha=150, layers=3, blur=4)   # 보랏빛 먹 번짐
+        ink.wash(cx - 30, surf + 8, 24, 6, (120, 112, 138), alpha=170, layers=2, blur=2)    # 수면 윤기
+        glass.masked(ink, pastel.poly_mask((bw, bh), pool + [(bw, bh), (0, bh)]))
     else:
         glass.wash(cx - 22, bottom - 16, 34, 16, WATERCOLOR['red'], alpha=220, layers=3)
         glass.wash(cx + 20, bottom - 14, 32, 15, WATERCOLOR['blue'], alpha=220, layers=3)
@@ -338,16 +336,12 @@ def half_bottle(kind):
 
     sh.stroke(half, 4.4)
     sh.stroke(mirror, 4.4)
-    if kind == 'black':
-        sh.stroke(bezier((cx - 58, top + 22), (cx - 66, top + 60), (cx - 40, top + 92), (cx - 26, top + 104), 20),
-                  4, WHITE, 240, amp=0.6)
-    else:
-        sh.stroke(bezier((cx - 58, bottom - 30), (cx - 64, bottom - 50), (cx - 52, bottom - 70), (cx - 44, bottom - 80), 14),
-                  3, WHITE, 220, amp=0.6)
+    sh.stroke(bezier((cx - 58, bottom - 30), (cx - 64, bottom - 50), (cx - 52, bottom - 70), (cx - 44, bottom - 80), 14),
+              3, WHITE, 220, amp=0.6)
 
-    # 넓은 나무판: 검정은 위 뚜껑, 컬러는 아래 받침
-    y, d, wood = (top, -1, dark_wood) if kind == 'black' else (bottom, 1, PASTEL['peach'])
-    y0, y1 = (y - 26, y + 2) if d < 0 else (y - 2, y + 26)
+    # 넓은 나무판 받침 (검정은 먹빛 나무)
+    wood = dark_wood if kind == 'black' else PASTEL['peach']
+    y0, y1 = bottom - 2, bottom + 26
     sh.wash(cx, (y0 + y1) / 2, 94, 13, wood, alpha=240, layers=2, blur=2)
     sh.wash(cx - 40, (y0 + y1) / 2 - 3, 40, 5, WHITE, alpha=120, layers=1, blur=2)
     sh.stroke([(cx - 96, y0), (cx + 96, y0 + 1), (cx + 98, y1), (cx - 95, y1 - 1), (cx - 96, y0 - 2)], 4.2)
@@ -365,7 +359,7 @@ def half_bottle(kind):
 
 
 def black_bottle():
-    """검정 잉크통 (모래시계 위 칸). 봉인 장소에서 찾는다."""
+    """검정 잉크통 (모래시계 위 칸을 바로 세운 것). 봉인 장소에서 찾는다."""
     return half_bottle('black')
 
 
