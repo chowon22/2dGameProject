@@ -139,7 +139,8 @@ def preset_cards():
 
 
 def owned():
-    return save_data.current['ink'] if save_data.current else {c: 0 for c in painter.COLORS}
+    """잉크병 옆에 보일 남은 잉크 (내 유닛에 놓은 만큼 빠진 것)."""
+    return save_data.ink_left(save_data.current) if save_data.current else {c: 0 for c in painter.COLORS}
 
 
 def ink_used():

@@ -213,12 +213,15 @@ class UnitSaveTest(unittest.TestCase):
         self.assertFalse(save_data.place(data, 2, red['id']))            # 빨강은 없다
         self.assertEqual(data['party'], [big['id'], None, None, None, small['id'], None])
         self.assertEqual(save_data.party_cost(data)['black'], 260)
+        self.assertEqual(save_data.ink_left(data)['black'], save_data.START_INK - 260)   # 놓으면 준다
         self.assertTrue(save_data.place(data, 0, small['id']))           # 바꿔 놓기: 있던 유닛은 빠진다고 친다
         self.assertEqual(save_data.party_cost(data)['black'], 120)
         save_data.swap_slots(data, 0, 5)
         self.assertEqual(data['party'], [None, None, None, None, small['id'], small['id']])
         save_data.remove_from_party(data, 4)
         self.assertEqual(data['party'][4], None)
+        save_data.remove_from_party(data, 5)
+        self.assertEqual(save_data.ink_left(data)['black'], save_data.START_INK)          # 빼면 돌아온다
 
     def test_party_full(self):
         data = save_data.new_game(1, self.dir, now=0.0)

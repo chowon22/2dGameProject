@@ -8,7 +8,7 @@
   · 놓인 유닛을 두 번 빠르게 누르면(더블클릭) 자리에서 뺀다
   · 끌어 놓기: 놓인 유닛을 다른 자리로 끌면 옮기기·맞바꾸기, 프리셋 카드를 자리로 끌면 그 자리에 놓기.
     자리 밖에 놓으면 그대로 돌아간다
-- 잉크 (오른쪽 위): 색마다 '놓은 유닛에 드는 잉크 / 가진 잉크'. 가진 잉크를 넘게는 놓을 수 없다
+- 잉크 (오른쪽 위): 색마다 남은 잉크. 유닛을 놓으면 그만큼 줄고 빼면 돌아온다. 남은 잉크보다 많이 드는 유닛은 못 놓는다
 - 내 프리셋 (아래): 전체 / 탱커 / 근접 딜러 / 원거리 딜러 / 서포터 칸으로 나눠 본다. 지금 놓을 수 없는 카드는 흐리게.
   같은 프리셋을 여러 번 놓을 수 있다. 많으면 마우스 휠로 넘긴다. 카드에 마우스를 올리면 드는 잉크가 뜨고,
   × 를 두 번 누르면 프리셋을 지운다
@@ -373,9 +373,9 @@ def draw_dragged():
 def draw_ink():
     if not data():
         return
-    used = save_data.party_cost(data())
+    left = save_data.ink_left(data())
     have = data()['ink']
-    text.draw('드는 잉크 / 가진 잉크', INK_X, INK_TOP + 2, 20, SOFT)
+    text.draw('남은 잉크', INK_X, INK_TOP + 2, 22, SOFT)
     for i, c in enumerate(painter.COLORS):
         y = INK_TOP - 36 - 34 * i
         icon = ink_icons[c]
@@ -383,8 +383,9 @@ def draw_ink():
             icon.opacify(0.35)
         icon.draw(INK_X + 14, y, 26, 30)
         icon.opacify(1)
-        over = used.get(c, 0) > have.get(c, 0)
-        text.draw(f'{used.get(c, 0)} / {have.get(c, 0)}', INK_X + 36, y - 2, 24, (200, 70, 80) if over else INK)
+        text.draw(str(left.get(c, 0)), INK_X + 36, y - 2, 26, INK)
+        if left.get(c, 0) != have.get(c, 0):   # 놓은 유닛에 쓰인 만큼
+            text.draw(f'(-{have.get(c, 0) - left.get(c, 0)})', INK_X + 104, y - 3, 20, SOFT)
 
 
 def draw_presets():

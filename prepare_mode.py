@@ -172,7 +172,8 @@ def draw_boy():
 
 def draw_hud():
     hud.draw(250, 646)
-    ink = save_data.current['ink'] if save_data.current else {c: 0 for c in INK_COLORS}
+    # 남은 잉크: 내 유닛에 놓은 유닛들에 드는 만큼 빠져 있다 (빼면 돌아온다)
+    ink = save_data.ink_left(save_data.current) if save_data.current else {c: 0 for c in INK_COLORS}
     for i, c in enumerate(INK_COLORS):
         x = 72 + i * 106
         ink_icons[c].draw(x, 648, 42, 48)

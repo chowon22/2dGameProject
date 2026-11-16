@@ -179,6 +179,12 @@ def party_cost(data):
     return total
 
 
+def ink_left(data):
+    """남은 잉크 = 가진 잉크 - 내 유닛에 놓은 유닛들에 드는 잉크 (놓으면 줄고 빼면 돌아온다)."""
+    cost = party_cost(data)
+    return {c: n - cost.get(c, 0) for c, n in data['ink'].items()}
+
+
 def can_place(data, unit, slot=None):
     """unit 을 slot 에 놓아도 가진 잉크 안인가 (slot 에 있던 유닛은 빠진다고 친다).
     slot 이 None 이면 빈 자리가 있어야 한다."""
