@@ -18,26 +18,27 @@ CARD_W, CARD_H = 112, 92
 THUMB_W, THUMB_H = 58, 38       # 카드 안 그림 칸 (왼쪽 잉크 칸 옆, 아래 이름 칸 위)
 DEL_DX, DEL_DY, DEL_R = 48, 38, 16   # 지우기 × 자리 (카드 가운데에서), 누르는 반지름
 
-_thumbs = {}                    # (슬롯, 유닛 id) → 썸네일 (없으면 None)
+_thumbs = {}                    # (슬롯, 유닛 id, 크기) → 썸네일 (없으면 None)
 
 
-def make_thumb(path):
-    """그린 부분만 잘라 카드 칸에 맞게 줄인 썸네일."""
+def make_thumb(path, max_w=THUMB_W, max_h=THUMB_H):
+    """그린 부분만 잘라 max_w x max_h 안에 맞게 줄인 그림."""
     img = PILImage.open(path).convert('RGBA')
     box = img.getbbox()
     if not box:
         return None
     img = img.crop(box)
-    k = min(THUMB_W / img.width, THUMB_H / img.height, 1.0)
+    k = min(max_w / img.width, max_h / img.height, 1.0)
     img = img.resize((max(1, round(img.width * k)), max(1, round(img.height * k))), PILImage.LANCZOS)
     return LiveImage(img.width, img.height, np.asarray(img))
 
 
-def thumb(unit):
-    key = (save_data.current['slot'], unit['id'])
+def thumb(unit, size=(THUMB_W, THUMB_H)):
+    """카드 썸네일. size 를 바꾸면 필드 미리보기용처럼 다른 크기로 (크기마다 따로 만들어 둔다)."""
+    key = (save_data.current['slot'], unit['id'], size)
     if key not in _thumbs:
         try:
-            _thumbs[key] = make_thumb(save_data.unit_path(*key))
+            _thumbs[key] = make_thumb(save_data.unit_path(*key[:2]), *size)
         except OSError:
             _thumbs[key] = None
     return _thumbs[key]
@@ -45,7 +46,8 @@ def thumb(unit):
 
 def forget(unit_id):
     """지운 유닛의 썸네일을 버린다 (같은 id 가 다시 쓰일 수 있다)."""
-    _thumbs.pop((save_data.current['slot'], unit_id), None)
+    for key in [k for k in _thumbs if k[:2] == (save_data.current['slot'], unit_id)]:
+        del _thumbs[key]
 
 
 def cost(unit):
