@@ -13,7 +13,12 @@
   같은 프리셋을 여러 번 놓을 수 있다. 많으면 마우스 휠로 넘긴다. 카드에 마우스를 올리면 드는 잉크가 뜨고,
   × 를 두 번 누르면 프리셋을 지운다
 - 다 빼기 / 닫기, ESC 닫기
+출전 준비 (월드 화면에서 스테이지를 누르면 stage_id 를 정하고 띄운다):
+- 적 자리에 그 스테이지의 몬스터가 서 있고, 우리 전투력 vs 적 예상 전투력이 뜬다
+- 시작! 을 누르면 전투(battle_mode)로
 """
+import math
+
 from pico2d import (clear_canvas, update_canvas, get_events, SDL_QUIT, SDL_KEYDOWN, SDL_MOUSEMOTION,
                     SDL_MOUSEBUTTONDOWN, SDL_MOUSEBUTTONUP, SDL_BUTTON_LEFT, SDLK_ESCAPE)
 from sdl2 import SDL_MOUSEWHEEL
@@ -23,6 +28,8 @@ import game_framework
 import painter
 import prepare_mode
 import save_data
+import stages
+import stats
 import text
 import title_mode
 import unit_cards
@@ -55,6 +62,7 @@ GRID_Y = (322, 214, 106)                  # 프리셋 줄마다 y
 TABS = ('all',) + frames.IDS              # 프리셋 나누기 칸
 TAB_GAP = 148
 
+stage_id = None                  # 출전 준비 중인 스테이지 (월드 화면이 정한다)
 panel = fade = toast_img = field_img = None
 spot_imgs = {}
 ink_icons = {}
@@ -176,6 +184,19 @@ def close():
     game_framework.pop_mode()
 
 
+def start_battle():
+    import battle_mode   # battle_mode 가 이 모듈을 부르지 않지만, 화면 모듈은 쓸 때 부른다
+    if not save_data.party_units(data()):
+        say('필드에 유닛을 놓아 주세요')
+        return
+    battle_mode.stage_id = stage_id
+    game_framework.push_mode(battle_mode)
+
+
+def our_power():
+    return stats.team_power([stats.unit_stats(u) for u in save_data.party_units(data())]) if data() else 0
+
+
 # ---------------------------------------------------------------- 모드
 def init():
     global panel, fade, toast_img, field_img, spot_imgs, ink_icons, buttons, row0, tab, deleter
@@ -188,6 +209,8 @@ def init():
     ink_icons = {c: image('prepare', f'ink_{c}.png') for c in painter.COLORS}
     buttons = [Button(1130, 482, 'button_unequip.png', 'button_unequip_hover.png', unequip_all, 0.0, 'draw'),
                Button(1150, 70, 'button_close.png', 'button_close_hover.png', close, 0.4, 'draw')]
+    if stage_id:
+        buttons.append(Button(1130, 392, 'button_start.png', 'button_start_hover.png', start_battle, 0.6, 'world'))
     if data():   # 지워진 프리셋 자리는 비운다
         data()['party'] = save_data.normalize_party(data()['party'], data()['units'])
     row0 = 0
@@ -201,11 +224,14 @@ def init():
 
 
 def finish():
+    global stage_id
     save_data.save_current()
+    stage_id = None   # 다음에 '내 유닛' 으로 열면 그냥 내 유닛 화면
 
 
 def pause():
-    pass
+    for b in buttons:
+        b.hovered = False
 
 
 def resume():
@@ -328,8 +354,12 @@ def update():
 
 # ---------------------------------------------------------------- 그리기
 def draw_field():
-    text.draw('내 유닛', 46, FIELD_Y + 40, 30, INK)
-    text.draw('필드에 설 자리', 46, FIELD_Y, 20, SOFT)
+    if stage_id:
+        text.draw('출전 준비', 46, FIELD_Y + 40, 30, INK)
+        text.draw(f'{stage_id}  {stages.stage(stage_id)["name"]}', 46, FIELD_Y, 22, SOFT)
+    else:
+        text.draw('내 유닛', 46, FIELD_Y + 40, 30, INK)
+        text.draw('필드에 설 자리', 46, FIELD_Y, 20, SOFT)
     field_img.draw(FIELD_X, FIELD_Y)
     top = FIELD_Y + 92
     text.draw('뒷줄', BACK_X, top, 22, SOFT, 'c')
@@ -337,6 +367,8 @@ def draw_field():
     text.draw('적이 설 자리', 2 * FIELD_MID - (FRONT_X + BACK_X) / 2, top, 22, (176, 168, 184), 'c')
     for s in range(save_data.PARTY_MAX):
         spot_imgs['_enemy'].draw(*enemy_pos(s))
+    if stage_id:
+        draw_enemies()
     if not data():
         return
     party = data()['party']
@@ -368,6 +400,20 @@ def draw_dragged():
         img.opacify(0.85)
         img.draw(mx, my - 10)
         img.opacify(1)
+
+
+def draw_enemies():
+    """출전 준비: 적 자리에 이 스테이지 몬스터들, 필드 아래에 전투력 비교."""
+    es = stages.enemies(stage_id)
+    for e in sorted(es, key=lambda e: e['slot'] % 3):   # 먼 줄부터
+        x, y = enemy_pos(e['slot'])
+        img = image(*e['image'])
+        k = 0.42 * e['scale']
+        img.draw(x, y + img.h * k / 2 - 4 + 2 * math.sin(t * 2.4 + e['slot']), img.w * k, img.h * k)
+    ours, theirs = our_power(), stats.team_power(es)
+    col = (70, 150, 100) if ours >= theirs else (200, 80, 90)   # 시작! 버튼 아래
+    text.draw(f'우리 전투력  {ours}', 1130, 332, 24, col, 'c')
+    text.draw(f'적 예상 전투력  {theirs}', 1130, 300, 24, INK, 'c')
 
 
 def draw_ink():
