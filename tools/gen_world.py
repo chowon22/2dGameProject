@@ -3,7 +3,7 @@
 - world_<n> / world_<n>_hover / world_<n>_locked: 월드 카드 (큰 번호 + 이름)
 - stage / stage_hover / stage_clear / stage_locked / stage_boss (+ _hover): 스테이지 동그라미 (번호는 실행 중에 쓴다)
 - result: 승리·패배 쪽지
-- button_start / back / skip / flee / return (+ _hover)
+- button_start / back / skip / flee / return / heal (+ _hover)
 
 실행: python tools/gen_world.py
 """
@@ -87,6 +87,7 @@ BUTTONS = (
     ('skip', '넘기기', 'mint', (170, 72), 30),
     ('flee', '도망가기', 'pink', (180, 72), 30),
     ('return', '돌아가기', 'sky', (200, 80), 32),
+    ('heal', '치료하기', 'mint', (180, 72), 30),
 )
 
 
