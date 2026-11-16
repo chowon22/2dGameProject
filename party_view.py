@@ -7,6 +7,7 @@
 import math
 
 import save_data
+import stats
 import unit_rig
 
 FRONT_GAP, BACK_GAP = 140, 270      # 소년 x 에서 앞줄·뒷줄까지 (왼쪽으로)
@@ -38,4 +39,8 @@ def draw(t, boy_x, ground, shadow=None):
         phase = t * STEP + slot * 1.3
         if shadow:
             shadow.draw(x, y - 2, r.w * 0.7, shadow.h * 0.45)
-        r.draw(x, y, 'walk', phase)   # 다리를 번갈아 내딛고 팔을 흔들며, 무기는 오른손에 쥐고
+        frac = save_data.hp_list(data)[slot]
+        if frac <= 0:
+            r.draw(x, y, 'idle', phase, stats.hurt_alpha(frac))   # 쓰러진 유닛은 걷지 못하고 흐릿하게 따라온다
+        else:
+            r.draw(x, y, 'walk', phase, stats.hurt_alpha(frac))   # 다친 유닛은 반투명   # 다리를 번갈아 내딛고 팔을 흔들며, 무기는 오른손에 쥐고
