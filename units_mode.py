@@ -1,11 +1,14 @@
 """내 유닛 화면. 준비 화면의 '내 유닛' 을 누르면 그 위에 뜬다 (push_mode).
 
-- 내 유닛 (위): 데리고 갈 유닛 6자리. 누르면 빠진다
-- 잉크: 색마다 '고른 유닛에 드는 잉크 / 가진 잉크'
-- 내 프리셋 (아래): 그려서 저장한 유닛. 전체 / 탱커 / 근접 딜러 / 원거리 딜러 / 서포터 칸으로 나눠 본다.
-  누르면 내 유닛에 들어간다. 가진 잉크 안에서만 고를 수 있고, 지금 더 고를 수 없는 카드는 흐리게 보인다.
-  같은 프리셋을 여러 번 고를 수 있다. 많으면 마우스 휠로 넘긴다.
-  카드에 마우스를 올리면 × 가 뜨고, 두 번 누르면 그 프리셋을 지운다
+- 필드 미리보기 (위): 흑백 들판 왼쪽에 우리 자리 6칸 (앞줄 3 + 뒷줄 3), 오른쪽은 적이 설 자리.
+  놓은 유닛은 그린 그림 그대로 자리에 서 있다.
+  · 자리를 누르면 고름(노랗게) → 프리셋을 누르면 그 자리에 놓인다 (있던 유닛은 바뀐다)
+  · 자리를 고른 채 다른 자리를 누르면 두 자리를 맞바꾼다 (빈 자리면 옮기기). 같은 자리를 다시 누르면 고르기 취소
+  · 자리를 안 고르고 프리셋을 누르면 앞줄부터 빈 자리에 놓인다
+  · 놓인 유닛에 마우스를 올리면 × — 누르면 자리에서 뺀다
+- 잉크 (오른쪽 위): 색마다 '놓은 유닛에 드는 잉크 / 가진 잉크'. 가진 잉크를 넘게는 놓을 수 없다
+- 내 프리셋 (아래): 전체 / 탱커 / 근접 딜러 / 원거리 딜러 / 서포터 칸으로 나눠 본다. 지금 놓을 수 없는 카드는 흐리게.
+  같은 프리셋을 여러 번 놓을 수 있다. 많으면 마우스 휠로 넘긴다. 카드의 × 를 두 번 누르면 프리셋을 지운다
 - 다 빼기 / 닫기, ESC 닫기
 """
 from pico2d import (clear_canvas, update_canvas, get_events,
@@ -30,34 +33,70 @@ TOAST_TIME = 1.8
 FADE_IN = 0.18
 NAMES = {'black': '검정', 'red': '빨강', 'green': '초록', 'blue': '파랑'}
 
-PARTY_Y, INK_Y, LIST_Y = 640, 540, 462
+# 필드 미리보기 (image/draw/field.png 780x240)
+FIELD_X, FIELD_Y = 590, 572
+FIELD_MID = FIELD_X                       # 가운데 점선: 왼쪽 우리, 오른쪽 적
+LANE_Y = (572, 522, 472)                  # 줄(위 = 먼 쪽 → 아래 = 가까운 쪽)마다 발 자리 y
+LANE_SKEW = (56, 0, -56)                  # 먼 줄은 오른쪽으로 (비스듬히 서서 덜 겹치게)
+FRONT_X, BACK_X = 476, 316
+FIGURE = (84, 70)                         # 자리에 서 있는 그림 최대 크기
+SPOT_W, SPOT_TOP = 48, 50                 # 자리 누르는 범위: 가로 ±48, 발 아래 16 ~ 위 50
+DEL_DX, DEL_DY = 40, 58                   # 놓인 유닛 지우기 × 자리 (발 기준)
+
+INK_X, INK_TOP = 1010, 668
+LIST_Y = 404
 ROW_X = 220
 GAP = 124
-COLS = 7
-GRID_Y = (378, 270, 162)         # 프리셋 줄마다 y
-TABS = ('all',) + frames.IDS     # 프리셋 나누기 칸
+COLS = 6
+GRID_Y = (322, 214, 106)                  # 프리셋 줄마다 y
+TABS = ('all',) + frames.IDS              # 프리셋 나누기 칸
 TAB_GAP = 148
 
-panel = fade = toast_img = None
+panel = fade = toast_img = field_img = None
+spot_imgs = {}
 ink_icons = {}
 buttons = []
 row0 = 0                         # 휠로 넘긴 줄 수
 tab = 'all'
 deleter = None
+selected = None                  # 고른 자리 (없으면 None)
+hover_slot = None                # 마우스가 올라간 놓인 유닛 자리
 toast = None
 t = 0.0
 
 
-def slot_x(i):
+# ---------------------------------------------------------------- 자리 계산
+def spot_pos(slot):
+    """자리 번호 → 발 자리 (x, y). 0~2 앞줄, 3~5 뒷줄, 줄 안에서는 위(먼 쪽)부터."""
+    lane = slot % 3
+    x = (FRONT_X if slot < 3 else BACK_X) + LANE_SKEW[lane]
+    return x, LANE_Y[lane]
+
+
+def enemy_pos(slot):
+    x, y = spot_pos(slot)
+    return 2 * FIELD_MID - x, y
+
+
+def slot_at(mx, my):
+    """(mx, my) 아래 자리. 가까운 줄(앞에 그려짐)부터 본다."""
+    for slot in sorted(range(save_data.PARTY_MAX), key=lambda s: -(s % 3)):
+        x, y = spot_pos(slot)
+        if abs(mx - x) <= SPOT_W and y - 16 <= my <= y + SPOT_TOP:
+            return slot
+    return None
+
+
+def card_x(i):
     return ROW_X + 56 + GAP * i
-
-
-def data():
-    return save_data.current
 
 
 def tab_x(i):
     return ROW_X + 69 + TAB_GAP * i
+
+
+def data():
+    return save_data.current
 
 
 def presets():
@@ -69,12 +108,19 @@ def presets():
 def visible():
     """지금 보이는 프리셋: [(유닛, x, y)]."""
     units = presets()[row0 * COLS:(row0 + len(GRID_Y)) * COLS]
-    return [(u, slot_x(i % COLS), GRID_Y[i // COLS]) for i, u in enumerate(units)]
+    return [(u, card_x(i % COLS), GRID_Y[i // COLS]) for i, u in enumerate(units)]
 
 
 def max_row0():
     rows = (len(presets()) + COLS - 1) // COLS
     return max(0, rows - len(GRID_Y))
+
+
+def placeable(unit):
+    """지금 이 프리셋을 놓을 수 있는가 (고른 자리가 있으면 그 자리에)."""
+    if selected is not None:
+        return save_data.can_place(data(), unit, selected)
+    return save_data.can_add(data(), unit)
 
 
 def say(msg):
@@ -84,12 +130,27 @@ def say(msg):
 
 # ---------------------------------------------------------------- 행동
 def pick(unit):
-    if save_data.add_to_party(data(), unit['id']):
+    global selected
+    if selected is not None:
+        if save_data.place(data(), selected, unit['id']):
+            selected = None
+        else:
+            say('잉크가 모자라요')
         return
-    if len(save_data.party_units(data())) >= save_data.PARTY_MAX:
-        say(f'내 유닛은 {save_data.PARTY_MAX}자리까지예요')
+    if save_data.add_to_party(data(), unit['id']) is not None:
+        return
+    say('자리가 꽉 찼어요.  자리를 골라 바꿔 놓아요' if None not in data()['party'] else '잉크가 모자라요')
+
+
+def click_slot(slot):
+    global selected
+    if selected is None:
+        selected = slot
+    elif selected == slot:
+        selected = None
     else:
-        say('잉크가 모자라요')
+        save_data.swap_slots(data(), selected, slot)
+        selected = None
 
 
 def pick_tab(name):
@@ -99,8 +160,10 @@ def pick_tab(name):
 
 
 def unequip_all():
+    global selected
     if data():
-        data()['party'].clear()
+        data()['party'] = [None] * save_data.PARTY_MAX
+    selected = None
 
 
 def close():
@@ -109,18 +172,22 @@ def close():
 
 # ---------------------------------------------------------------- 모드
 def init():
-    global panel, fade, toast_img, ink_icons, buttons, row0, tab, deleter, toast, t
+    global panel, fade, toast_img, field_img, spot_imgs, ink_icons, buttons, row0, tab, deleter
+    global selected, hover_slot, toast, t
     panel = image('draw', 'panel.png')
     fade = image('common', 'fade.png')
     toast_img = image('prepare', 'toast.png')
+    field_img = image('draw', 'field.png')
+    spot_imgs = {k: image('draw', f'spot{k}.png') for k in ('', '_on', '_enemy')}
     ink_icons = {c: image('prepare', f'ink_{c}.png') for c in painter.COLORS}
-    buttons = [Button(1130, PARTY_Y, 'button_unequip.png', 'button_unequip_hover.png', unequip_all, 0.0, 'draw'),
+    buttons = [Button(1130, 482, 'button_unequip.png', 'button_unequip_hover.png', unequip_all, 0.0, 'draw'),
                Button(1150, 70, 'button_close.png', 'button_close_hover.png', close, 0.4, 'draw')]
-    if data():   # 지워진 프리셋이 남아 있으면 정리
-        data()['party'] = [u['id'] for u in save_data.party_units(data())]
+    if data():   # 지워진 프리셋 자리는 비운다
+        data()['party'] = save_data.normalize_party(data()['party'], data()['units'])
     row0 = 0
     tab = 'all'
     deleter = unit_cards.Deleter()
+    selected = hover_slot = None
     toast = None
     t = 0.0
     title_mode.move_mouse(title_mode.mouse)
@@ -139,8 +206,20 @@ def resume():
 
 
 def click(mx, my):
-    global row0
+    global row0, selected
     if any(b.click(mx, my) for b in buttons) or not data():
+        return
+    # 놓인 유닛 × → 자리에서 빼기
+    if hover_slot is not None:
+        x, y = spot_pos(hover_slot)
+        if abs(mx - x - DEL_DX) <= 16 and abs(my - y - DEL_DY) <= 16:
+            save_data.remove_from_party(data(), hover_slot)
+            if selected == hover_slot:
+                selected = None
+            return
+    slot = slot_at(mx, my)
+    if slot is not None:
+        click_slot(slot)
         return
     gone = deleter.click(visible(), mx, my)
     if gone == 'asked':
@@ -154,14 +233,28 @@ def click(mx, my):
         if abs(mx - tab_x(i)) <= 62 and abs(my - LIST_Y) <= 24:
             pick_tab(name)
             return
-    for i in range(len(save_data.party_units(data()))):
-        if unit_cards.hit(slot_x(i), PARTY_Y, mx, my):
-            save_data.remove_from_party(data(), i)
-            return
     for unit, x, y in visible():
         if unit_cards.hit(x, y, mx, my):
             pick(unit)
             return
+
+
+def mouse_move(mx, my):
+    global hover_slot
+    title_mode.move_mouse((mx, my))
+    deleter.move(visible(), mx, my)
+    for b in buttons:
+        b.mouse_move(mx, my)
+    hover_slot = None
+    if data():
+        slot = slot_at(mx, my)
+        # × 위에 있어도 그 유닛 자리로 친다
+        for s in range(save_data.PARTY_MAX):
+            x, y = spot_pos(s)
+            if abs(mx - x - DEL_DX) <= 16 and abs(my - y - DEL_DY) <= 16:
+                slot = s
+        if slot is not None and data()['party'][slot] is not None:
+            hover_slot = slot
 
 
 def handle_events():
@@ -173,11 +266,7 @@ def handle_events():
             close()
             return
         elif event.type == SDL_MOUSEMOTION:
-            pos = title_mode.to_canvas(event)
-            title_mode.move_mouse(pos)
-            deleter.move(visible(), *pos)
-            for b in buttons:
-                b.mouse_move(*pos)
+            mouse_move(*title_mode.to_canvas(event))
         elif event.type == SDL_MOUSEBUTTONDOWN and event.button == SDL_BUTTON_LEFT:
             if t > FADE_IN:
                 click(*title_mode.to_canvas(event))
@@ -197,31 +286,47 @@ def update():
 
 
 # ---------------------------------------------------------------- 그리기
-def draw_party():
-    text.draw('내 유닛', 46, PARTY_Y, 30, INK)
-    party = save_data.party_units(data()) if data() else []
-    for i in range(save_data.PARTY_MAX):
-        if i < len(party):
-            unit_cards.draw(party[i], slot_x(i), PARTY_Y, on=True)
-        else:
-            unit_cards.draw_empty(slot_x(i), PARTY_Y)
+def draw_field():
+    text.draw('내 유닛', 46, FIELD_Y + 40, 30, INK)
+    text.draw('필드에 설 자리', 46, FIELD_Y, 20, SOFT)
+    field_img.draw(FIELD_X, FIELD_Y)
+    top = FIELD_Y + 92
+    text.draw('뒷줄', BACK_X, top, 22, SOFT, 'c')
+    text.draw('앞줄', FRONT_X, top, 22, SOFT, 'c')
+    text.draw('적이 설 자리', 2 * FIELD_MID - (FRONT_X + BACK_X) / 2, top, 22, (176, 168, 184), 'c')
+    for s in range(save_data.PARTY_MAX):
+        spot_imgs['_enemy'].draw(*enemy_pos(s))
+    if not data():
+        return
+    party = data()['party']
+    # 먼 줄부터 그려야 가까운 줄이 앞에 온다
+    for slot in sorted(range(save_data.PARTY_MAX), key=lambda s: s % 3):
+        x, y = spot_pos(slot)
+        spot_imgs['_on' if slot == selected else ''].draw(x, y)
+        unit = save_data.find_unit(data(), party[slot]) if party[slot] is not None else None
+        if unit:
+            img = unit_cards.thumb(unit, FIGURE)
+            if img:
+                img.draw(x, y - 6 + img.h / 2)
+            if slot == hover_slot:
+                image('draw', 'card_del.png').draw(x + DEL_DX, y + DEL_DY)
 
 
 def draw_ink():
-    text.draw('잉크', 46, INK_Y, 30, INK)
     if not data():
         return
     used = save_data.party_cost(data())
     have = data()['ink']
+    text.draw('드는 잉크 / 가진 잉크', INK_X, INK_TOP + 2, 20, SOFT)
     for i, c in enumerate(painter.COLORS):
-        x = ROW_X + 30 + 180 * i
+        y = INK_TOP - 36 - 34 * i
         icon = ink_icons[c]
         if have.get(c, 0) <= 0:
             icon.opacify(0.35)
-        icon.draw(x, INK_Y, 42, 48)
+        icon.draw(INK_X + 14, y, 26, 30)
         icon.opacify(1)
-        text.draw(f'{used.get(c, 0)} / {have.get(c, 0)}', x + 28, INK_Y - 2, 28, INK)
-    text.draw('드는 잉크 / 가진 잉크', ROW_X + 30 + 180 * 4, INK_Y, 22, SOFT)
+        over = used.get(c, 0) > have.get(c, 0)
+        text.draw(f'{used.get(c, 0)} / {have.get(c, 0)}', INK_X + 36, y - 2, 24, (200, 70, 80) if over else INK)
 
 
 def draw_presets():
@@ -233,16 +338,18 @@ def draw_presets():
         return
     if not presets():
         text.draw('이 칸에는 아직 그린 유닛이 없어요', ROW_X, GRID_Y[0], 24, SOFT)
-    hint = '누르면 내 유닛에 들어가요  ·  내 유닛을 누르면 빠져요  ·  × 를 두 번 누르면 지워요'
+    if selected is not None:
+        hint = '고른 자리에 놓을 프리셋을 눌러요  ·  다른 자리를 누르면 맞바꿔요'
+    else:
+        hint = '자리를 누르고 프리셋을 고르면 그 자리에 놓여요  ·  그냥 누르면 앞줄부터'
     if max_row0():
         hint += f'  ·  휠로 더 보기 ({row0 + 1}/{max_row0() + 1})'
-    text.draw(hint, 46, 70, 22, SOFT)
-    picked = set(data()['party'])
+    text.draw(hint, 46, 30, 20, SOFT)
+    party = data()['party']
     for unit, x, y in visible():
-        ok = save_data.can_add(data(), unit)
-        unit_cards.draw(unit, x, y, on=unit['id'] in picked, alpha=1.0 if ok else 0.38,
+        unit_cards.draw(unit, x, y, on=unit['id'] in party, alpha=1.0 if placeable(unit) else 0.38,
                         delete=deleter.state(unit))
-        n = data()['party'].count(unit['id'])
+        n = party.count(unit['id'])
         if n > 1:
             text.draw(f'×{n}', x + 44, y - 28, 16, INK, 'c')
 
@@ -262,7 +369,7 @@ def draw():
     clear_canvas()
     prepare_mode.draw_scene()
     panel.draw(W / 2, H / 2, W - 16, H - 12)
-    draw_party()
+    draw_field()
     draw_ink()
     draw_presets()
     for b in buttons:
