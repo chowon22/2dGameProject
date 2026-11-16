@@ -1,6 +1,7 @@
 """그린 유닛·몬스터의 능력치와 원소 (PRD 4.2, 5장). pico2d 와 무관한 순수 로직 (tests/test_battle.py).
 
-- 검정을 많이 칠할수록 틀(역할)의 기본 능력치가 오른다: 탱커 체력 / 근딜·원딜 공격력 / 서포터 버프량 (+ 모두 체력 조금)
+- 검정 잉크 1 = 체력·공격력(·버프량) +1% (예: 검정 150 을 썼으면 기본의 2.5배). 역할마다 기본 능력치가 다르다
+  (탱커는 체력, 근딜·원딜은 공격력, 서포터는 버프량이 높다)
 - 색을 칠하면 원소가 생긴다: 가장 많이 칠한 색 (빨강 불, 초록 풀, 파랑 물). 많이 칠할수록 상성이 세게 먹힌다
 - 체형: 작은 체형은 날렵하게(공격 조금 ↑, 체력 ↓), 큰 체형은 튼튼하게(체력 ↑, 공격 조금 ↓)
 - 전투력(power) = 한눈에 비교하는 값 (체력 + 공격력·버프량 가중 합)
@@ -10,13 +11,10 @@ ELEMENT_OF = {'red': 'fire', 'green': 'grass', 'blue': 'water'}
 ELEMENT_NAMES = {'fire': '불', 'grass': '풀', 'water': '물', None: '없음'}
 BEATS = {'fire': 'grass', 'grass': 'water', 'water': 'fire'}   # 불 > 풀 > 물 > 불
 
-BASE = {   # 역할마다 기본 (체력, 공격력, 버프량)
-    'tank': (40, 4, 0), 'melee': (26, 8, 0), 'ranged': (20, 7, 0), 'support': (22, 3, 4),
+BASE = {   # 역할마다 기본 (체력, 공격력, 버프량) — 검정 잉크 % 만큼 커진다
+    'tank': (40, 4, 0), 'melee': (24, 8, 0), 'ranged': (20, 7, 0), 'support': (22, 3, 4),
 }
-BLACK_PER = {   # 검정 몇 픽셀마다 역할 능력치 +1 (그린 그림은 보통 검정 8000 ~ 13000 px)
-    'tank': ('hp', 200), 'melee': ('atk', 800), 'ranged': ('atk', 900), 'support': ('buff', 1000),
-}
-BLACK_HP_PER = 800            # 모든 역할: 검정 이만큼마다 체력 +1
+BLACK_PERCENT = 1.0           # 검정 잉크 1 마다 능력치 +1%
 BODY_MUL = {'small': (0.85, 1.1), 'medium': (1.0, 1.0), 'large': (1.2, 0.92)}   # (체력, 공격력)
 ELEMENT_MIN_SHARE = 0.08      # 색이 칠한 픽셀의 이만큼은 넘어야 원소가 생긴다
 ELEMENT_FULL = 2000           # 색을 이만큼 칠하면 상성 세기 최대
@@ -31,16 +29,8 @@ def unit_stats(unit):
     role = unit.get('frame') if unit.get('frame') in BASE else 'melee'
     counts = unit.get('counts', {})
     black = counts.get('black', 0)
-    hp, atk, buff = BASE[role]
-    stat, per = BLACK_PER[role]
-    bonus = black / per
-    if stat == 'hp':
-        hp += bonus
-    elif stat == 'atk':
-        atk += bonus
-    else:
-        buff += bonus
-    hp += black / BLACK_HP_PER
+    grow = 1 + unit.get('ink', {}).get('black', 0) * BLACK_PERCENT / 100   # 검정 잉크 1 = +1%
+    hp, atk, buff = (v * grow for v in BASE[role])
     mh, ma = BODY_MUL.get(unit.get('body', 'medium'), (1.0, 1.0))
     hp, atk = hp * mh, atk * ma
     colors = {c: counts.get(c, 0) for c in ELEMENT_OF}
@@ -64,6 +54,18 @@ def element_mul(attacker, defender):
     if d and BEATS.get(d) == a:
         return 0.8 - 0.1 * s
     return 1.0
+
+
+HURT_MAX, HURT_MIN = 0.8, 0.15   # 다친 그림 투명도: 거의 가득 → 거의 없음 (PRD 1.4: 그림이 곧 체력)
+
+
+def hurt_alpha(frac):
+    """남은 체력 비율 → 그림 투명도. 가득이면 1, 한 번이라도 다치면 바로 반투명, 쓰러지면 아주 흐리게."""
+    if frac >= 1:
+        return 1.0
+    if frac <= 0:
+        return 0.12
+    return HURT_MIN + (HURT_MAX - HURT_MIN) * frac
 
 
 def team_power(stats_list):

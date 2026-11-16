@@ -11,19 +11,26 @@ import stages  # noqa: E402
 import stats  # noqa: E402
 
 
-def unit(frame, black=0, red=0, green=0, blue=0, body='medium'):
-    return {'id': 1, 'frame': frame, 'body': body, 'counts': {'black': black, 'red': red, 'green': green, 'blue': blue}}
+def unit(frame, black=0, red=0, green=0, blue=0, body='medium', ink=None):
+    """black…blue 는 칠한 픽셀 수, ink 는 검정 잉크 (안 주면 픽셀 50 = 잉크 1)."""
+    return {'id': 1, 'frame': frame, 'body': body, 'counts': {'black': black, 'red': red, 'green': green, 'blue': blue},
+            'ink': {'black': black // 50 if ink is None else ink}}
 
 
 class StatsTest(unittest.TestCase):
-    def test_black_grows_role_stat(self):
-        tank_a, tank_b = stats.unit_stats(unit('tank', 1000)), stats.unit_stats(unit('tank', 5000))
-        self.assertGreater(tank_b['hp'], tank_a['hp'])
-        melee_a, melee_b = stats.unit_stats(unit('melee', 1000)), stats.unit_stats(unit('melee', 5000))
-        self.assertGreater(melee_b['atk'], melee_a['atk'])
-        sup = stats.unit_stats(unit('support', 4000))
-        self.assertGreater(sup['buff'], stats.BASE['support'][2])
-        self.assertGreater(tank_b['power'], tank_a['power'])
+    def test_black_ink_is_percent(self):
+        for role, (hp, atk, buff) in stats.BASE.items():
+            base = stats.unit_stats(unit(role, ink=0))
+            self.assertEqual((base['hp'], base['atk'], base['buff']), (hp, atk, buff))
+            plus = stats.unit_stats(unit(role, ink=100))          # 검정 100 = +100% = 2배
+            self.assertEqual(plus['hp'], hp * 2)
+            self.assertAlmostEqual(plus['atk'], atk * 2)
+            self.assertAlmostEqual(plus['buff'], buff * 2)
+            one = stats.unit_stats(unit(role, ink=1))             # 검정 1 = +1%
+            self.assertAlmostEqual(one['atk'], round(atk * 1.01, 1))
+            self.assertGreater(plus['power'], base['power'])
+        self.assertGreater(stats.BASE['tank'][0], stats.BASE['melee'][0])     # 역할마다 기본이 다르다
+        self.assertGreater(stats.BASE['melee'][1], stats.BASE['tank'][1])
 
     def test_color_makes_element(self):
         self.assertIsNone(stats.unit_stats(unit('melee', 3000))['element'])           # 검정뿐: 원소 없음
