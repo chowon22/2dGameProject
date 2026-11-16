@@ -160,6 +160,27 @@ class FramesTest(unittest.TestCase):
         self.assertAlmostEqual(tip[0], g['to'][0] + 100)
         self.assertAlmostEqual(tip[1], g['to'][1])
 
+    def test_split_person_into_limbs(self):
+        import unit_art
+        for fid in frames.IDS:
+            f = frames.get(fid, 'large')
+            p = Paper(*f['size'])
+            for part in f['parts']:
+                pts = frames.outline(part, 40)
+                p.begin(*pts[0], 'black', PLENTY)
+                for q in pts[1:]:
+                    p.drag(*q, 'black', PLENTY)
+            person = p.rgba()
+            pieces = unit_art.split_person({'frame': fid, 'body': 'large'}, person)
+            self.assertEqual(set(pieces), {'body', 'leg_l', 'leg_r', 'arm_l', 'arm_r'})
+            alphas = np.stack([pc[..., 3] > 0 for pc in pieces.values()])
+            self.assertTrue((alphas.any(0) == (person[..., 3] > 0)).all(), fid)   # 빠짐없이
+            self.assertTrue((alphas.sum(0) <= 1).all(), fid)                       # 겹치지 않게
+            self.assertTrue((alphas.sum((1, 2)) > 50).all(), fid)
+            piv = frames.limb_pivots(fid, 'large')
+            self.assertLess(piv['leg_l'][1], piv['leg_l'][1] + 1)
+            self.assertLess(piv['arm_r'][1], piv['leg_r'][1])                      # 어깨가 엉덩이보다 위
+
     def test_fit_keeps_feet(self):
         img = np.zeros((390, 280, 4), np.uint8)
         img[389, 140] = 255                       # 맨 아래 가운데

@@ -274,3 +274,16 @@ def held(frame_id, group, p, body='medium'):
     dx, dy = p[0] - g['pivot'][0], p[1] - g['pivot'][1]
     c, s = math.cos(g['angle']), math.sin(g['angle'])
     return g['to'][0] + dx * c + dy * s, g['to'][1] - dx * s + dy * c
+
+
+LIMBS = ('leg_l', 'leg_r', 'arm_l', 'arm_r')   # 걸을 때 따로 흔드는 부위
+
+
+def limb_pivots(frame_id, body='medium'):
+    """팔다리가 도는 축: 다리는 엉덩이(타원 위쪽), 팔은 어깨 (사람 종이 좌표)."""
+    out = {}
+    for name, kind, *rest in get(frame_id, body)['parts']:
+        if name in LIMBS and kind == 'e':
+            cx, cy, rx, ry = rest
+            out[name] = (cx, cy - ry * (0.75 if name.startswith('leg') else 0.72))
+    return out

@@ -4,6 +4,7 @@
 - load(slot, unit): (사람, [무기 …]) RGBA 배열 — 그 틀·체형의 종이 크기로 맞춘다. 없는 그림은 빈 종이
 - pieces(unit, gears): 무기마다 손에 쥐었을 때의 가운데·쥔 점·각도
 - compose(unit, person, gears): 무기를 손에 쥔 한 장짜리 그림 (카드 썸네일·필드 미리보기용)
+- split_person(unit, person): 사람 그림을 몸통 / 팔다리(leg_l·leg_r·arm_l·arm_r)로 나눈다 (걷는 애니메이션용)
 """
 import math
 
@@ -77,3 +78,28 @@ def compose(unit, person, gears):
     arr = np.asarray(canvas)
     b = bbox(arr)
     return arr[b[1]:b[3], b[0]:b[2]].copy() if b else None
+
+
+def split_person(unit, person):
+    """사람 그림을 {'body', 'leg_l', 'leg_r', 'arm_l', 'arm_r'} 로 나눈다 (같은 크기 RGBA 들).
+    칠한 픽셀은 틀 부위 지도에서 가장 가까운 부위로 간다 (부위 밖으로 조금 삐져나온 선도 따라간다)."""
+    from PIL import ImageFilter
+    fid, body = frame_of(unit)
+    out = {'body': person.copy()}
+    if fid is None:
+        return out
+    lab = frames.part_mask(fid, body).copy()
+    names = frames.part_names(fid, body)
+    for _ in range(10):   # 부위 밖 10px 까지 이웃 부위로 넓힌다
+        grown = np.asarray(Image.fromarray(lab).filter(ImageFilter.MaxFilter(3)))
+        lab = np.where(lab == 0, grown, lab)
+    drawn = person[..., 3] > 0
+    for limb in frames.LIMBS:
+        if limb not in names:
+            continue
+        mine = drawn & (lab == names.index(limb) + 1)
+        piece = person.copy()
+        piece[~mine, 3] = 0
+        out['body'][mine, 3] = 0
+        out[limb] = piece
+    return out
