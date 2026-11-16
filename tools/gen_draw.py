@@ -3,7 +3,8 @@
 - panel: 화면을 덮는 커다란 수채화 종이 판
 - paper: 그림을 그리는 흰 도화지 (가운데 PAPER_W x PAPER_H 가 실제로 칠하는 곳)
 - card / card_on / card_empty: 프리셋(내가 그린 유닛) 카드
-- frame_<id> / frame_<id>_on: 틀 고르기 카드 (틀 실루엣 + 이름)
+- guide_<id>: 종이에 깔리는 틀 밑그림 — 역할별 귀여운 생물(frames.py)을 삐뚤빼뚤한 연필 점선으로
+- frame_<id> / frame_<id>_on: 틀 고르기 카드 (밑그림 + 이름)
 - ink_ring: 고른 잉크 아래 동그라미, eraser: 지우개
 - tab_<all|틀 id> / _on: 내 유닛 화면의 프리셋 나누기 칸 (전체·탱커·근접 딜러·원거리 딜러·서포터)
 - card_del / card_del_confirm: 프리셋 카드 모서리의 지우기 × (한 번 누르면 붉게 → 한 번 더 누르면 지움)
@@ -14,8 +15,10 @@
 import os
 import sys
 
+import math
+
 import numpy as np
-from PIL import Image, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -86,15 +89,83 @@ def card(state):
                 line=4.2 if state == 'on' else 3.0, r=14)
 
 
+GUIDE_LINE = (150, 128, 170)
+DASH, GAP = 13.0, 8.0
+
+
+def _resample(points, step=2.0):
+    out = [points[0]]
+    for (x0, y0), (x1, y1) in zip(points, points[1:]):
+        n = max(1, int(math.hypot(x1 - x0, y1 - y0) / step))
+        out += [(x0 + (x1 - x0) * i / n, y0 + (y1 - y0) * i / n) for i in range(1, n + 1)]
+    return out
+
+
+def _dashes(points, keep=None):
+    """선을 점선 조각들로. keep(x, y) 가 False 인 곳은 비운다."""
+    pts = _resample(points)
+    out, cur, run, on = [], [], 0.0, True
+    for i, p in enumerate(pts):
+        if i:
+            run += math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1])
+        if on and run > DASH:
+            on, run = False, 0.0
+        elif not on and run > GAP:
+            on, run = True, 0.0
+        if on and (keep is None or keep(*p)):
+            cur.append(p)
+        elif cur:
+            out.append(cur)
+            cur = []
+    if cur:
+        out.append(cur)
+    return [d for d in out if len(d) > 1]
+
+
+def guide(frame, alpha=170, width=3.0, fill_alpha=22, color=GUIDE_LINE):
+    """틀 밑그림: 부위들을 합친 바깥 윤곽 + 무늬를 연필 점선으로, 안은 아주 옅게."""
+    w, h = frames.PAPER_W, frames.PAPER_H
+    sh = Sheet(w, h, seed=1100 + frames.IDS.index(frame['id']))
+    sh.line = color
+    parts = frame['parts']
+    masks = []
+    for part in parts:
+        m = Image.new('L', (w, h), 0)
+        ImageDraw.Draw(m).polygon(frames.outline(part), fill=255)
+        masks.append(np.asarray(m.filter(ImageFilter.MinFilter(5))) > 0)   # 조금 줄인 안쪽
+    union = np.asarray(Image.fromarray(((frames.part_mask(frame['id']) > 0) * 255).astype(np.uint8)))
+    p = Sheet(w, h, seed=1)
+    p.fill_poly([(0, 0), (w, 0), (w, h), (0, h)], color, fill_alpha)
+    sh.masked(p, Image.fromarray(union))
+    for i, part in enumerate(parts):
+        others = [m for j, m in enumerate(masks) if j != i]
+
+        def keep(x, y, others=others):
+            xi, yi = min(w - 1, max(0, int(x))), min(h - 1, max(0, int(y)))
+            return not any(m[yi, xi] for m in others)
+        for d in _dashes(frames.outline(part), keep):
+            sh.stroke(d, width, alpha=alpha, amp=0.4, taper=False)
+    for det in frame['details']:
+        if det[0] == 'dot':
+            _, x, y, r = det
+            sh.fill_poly(ellipse_points(x, y, r, r), color, alpha)
+        else:
+            for d in _dashes(list(det)):
+                sh.stroke(d, width * 0.85, alpha=alpha, amp=0.3, taper=False)
+    return sh.result()
+
+
 def frame_card(frame, on):
     w, h = FRAME_CARD
     tint = {'tank': 'sky', 'melee': 'pink', 'ranged': 'peach', 'support': 'mint'}[frame['id']]
     img = note(w, h, 930 + frames.IDS.index(frame['id']) * 3 + on,
                ((w / 2, h / 2, w / 2, h / 2, PASTEL[tint], 150 if on else 60),), line=4.2 if on else 3.0, r=16)
     # 왼쪽에 작은 틀 실루엣
-    sil = frames.silhouette(frame['id'], (190, 98), color=PLUM, fill_alpha=90 if on else 60, line_alpha=230)
-    icon = Image.fromarray(sil, 'RGBA').crop((28, 0, 166, 98)).resize((76, 54), Image.LANCZOS)
-    img.alpha_composite(icon, (14, (h - 54) // 2))
+    g = guide(frame, alpha=255, width=6.0, fill_alpha=80 if on else 50, color=PLUM)
+    g = g.crop(g.getbbox())
+    k = min(76 / g.width, 62 / g.height)
+    icon = g.resize((round(g.width * k), round(g.height * k)), Image.LANCZOS)
+    img.alpha_composite(icon, (14 + (76 - icon.width) // 2, (h - icon.height) // 2))
     sh = Sheet(w, h, seed=0, ss=1)
     sh.img = img
     sh.ink_text(frame['name'], ImageFont.truetype(os.path.join(pastel.FONTS, pastel.HAND), 24), 150, h / 2,
@@ -165,6 +236,7 @@ def main():
     for state in ('off', 'on', 'empty'):
         save(card(state), {'off': 'card.png', 'on': 'card_on.png', 'empty': 'card_empty.png'}[state])
     for f in frames.FRAMES:
+        save(guide(f), f'guide_{f["id"]}.png')
         for on in (False, True):
             save(frame_card(f, on), f'frame_{f["id"]}{"_on" if on else ""}.png')
     for i, (tid, label, tint) in enumerate(TABS):
