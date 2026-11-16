@@ -9,8 +9,6 @@
 
 키: 1~4 잉크, E 지우개, ESC 닫기
 """
-import numpy as np
-from PIL import Image as PILImage
 from pico2d import (clear_canvas, update_canvas, get_events,
                     SDL_QUIT, SDL_KEYDOWN, SDL_MOUSEMOTION, SDL_MOUSEBUTTONDOWN, SDL_MOUSEBUTTONUP, SDL_BUTTON_LEFT,
                     SDLK_ESCAPE, SDLK_1, SDLK_4, SDLK_e)
@@ -22,6 +20,7 @@ import prepare_mode
 import save_data
 import text
 import title_mode
+import unit_cards
 from assets import image
 from live_image import LiveImage
 from ui_button import Button
@@ -35,7 +34,6 @@ FADE_IN = 0.18
 PRESET_Y, FRAME_Y, INK_Y = 652, 554, 466
 ROW_X = 220                     # 줄 내용이 시작하는 x
 PRESET_GAP, MAX_PRESETS = 124, 8
-THUMB_W, THUMB_H = 84, 52       # 프리셋 카드 안 그림 칸
 FRAME_GAP = 216
 INK_GAP = 120
 # 종이: 가운데 (PAPER_X, PAPER_Y), 실제로 칠하는 곳은 frames.PAPER_W x PAPER_H
@@ -46,14 +44,12 @@ SIDE_X = 1080
 TOOLS = painter.COLORS + (painter.ERASER,)
 
 panel = paper_img = ink_ring = eraser_img = fade = toast_img = None
-card_imgs = {}
 frame_imgs = {}
 ink_icons = {}
 silhouettes = {}
 buttons = []
 paper = None
 paper_tex = None
-thumbs = {}             # 유닛 id → 썸네일 Image
 frame_id = frames.IDS[0]
 tool = 'black'
 picked = None           # 지금 종이에 올린 프리셋 id
@@ -156,15 +152,14 @@ def close():
 
 # ---------------------------------------------------------------- 모드
 def init():
-    global panel, paper_img, ink_ring, eraser_img, fade, toast_img, card_imgs, frame_imgs, ink_icons
-    global silhouettes, buttons, paper, paper_tex, thumbs, tool, picked, painting, toast, t
+    global panel, paper_img, ink_ring, eraser_img, fade, toast_img, frame_imgs, ink_icons
+    global silhouettes, buttons, paper, paper_tex, tool, picked, painting, toast, t
     panel = image('draw', 'panel.png')
     paper_img = image('draw', 'paper.png')
     ink_ring = image('draw', 'ink_ring.png')
     eraser_img = image('draw', 'eraser.png')
     fade = image('common', 'fade.png')
     toast_img = image('prepare', 'toast.png')
-    card_imgs = {s: image('draw', f'card{s}.png') for s in ('', '_on', '_empty')}
     frame_imgs = {(f, on): image('draw', f'frame_{f}{"_on" if on else ""}.png')
                   for f in frames.IDS for on in (False, True)}
     ink_icons = {c: image('prepare', f'ink_{c}.png') for c in painter.COLORS}
@@ -177,7 +172,6 @@ def init():
     buttons = [Button(SIDE_X, y, f'button_{name}.png', f'button_{name}_hover.png', action, 0.3 * i, 'draw')
                for i, (name, y, action) in enumerate((('save', 300, save_unit), ('clear', 200, clear_paper),
                                                       ('close', 100, close)))]
-    thumbs = {}
     tool = 'black'
     picked = None
     painting = False
@@ -212,7 +206,7 @@ def click(mx, my):
     if any(b.click(mx, my) for b in buttons):
         return
     for i, unit in enumerate(shown_units()):
-        if hit(preset_x(i), PRESET_Y, 100, 80, mx, my):
+        if unit_cards.hit(preset_x(i), PRESET_Y, mx, my):
             pick_preset(unit)
             return
     for i, fid in enumerate(frames.IDS):
@@ -282,46 +276,15 @@ def update():
 
 
 # ---------------------------------------------------------------- 그리기
-def make_thumb(path):
-    """그린 부분만 잘라 카드 칸에 맞게 줄인 썸네일."""
-    img = PILImage.open(path).convert('RGBA')
-    box = img.getbbox()
-    if not box:
-        return None
-    img = img.crop(box)
-    k = min(THUMB_W / img.width, THUMB_H / img.height, 1.0)
-    img = img.resize((max(1, round(img.width * k)), max(1, round(img.height * k))), PILImage.LANCZOS)
-    return LiveImage(img.width, img.height, np.asarray(img))
-
-
-def thumb(unit):
-    if unit['id'] not in thumbs:
-        try:
-            thumbs[unit['id']] = make_thumb(save_data.unit_path(save_data.current['slot'], unit['id']))
-        except OSError:
-            thumbs[unit['id']] = None
-    return thumbs[unit['id']]
-
-
 def draw_presets():
     text.draw('내 프리셋', 46, PRESET_Y, 30, INK)
     units = shown_units()
     if not units:
-        card_imgs['_empty'].draw(preset_x(0), PRESET_Y)
+        unit_cards.draw_empty(preset_x(0), PRESET_Y)
         text.draw('그려서 저장하면 여기에 생겨요', preset_x(0) + 76, PRESET_Y, 26, (150, 128, 170))
         return
     for i, unit in enumerate(units):
-        x = preset_x(i)
-        card_imgs['_on' if unit['id'] == picked else ''].draw(x, PRESET_Y)
-        img = thumb(unit)
-        if img:
-            img.draw(x, PRESET_Y + 8)
-        name = frames.get(unit['frame'])['name'] if unit.get('frame') in frames.IDS else ''
-        text.draw(name, x, PRESET_Y - 27, 17, INK, 'c')
-        # 이 유닛에 드는 잉크: 카드 안 왼쪽 위에 작은 잉크병 딱지
-        cost = sum(unit.get('ink', {}).values())
-        ink_icons['black'].draw(x - 36, PRESET_Y + 27, 15, 17)
-        text.draw(str(cost), x - 27, PRESET_Y + 26, 17, INK)
+        unit_cards.draw(unit, preset_x(i), PRESET_Y, on=unit['id'] == picked)
 
 
 def draw_frames():
