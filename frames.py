@@ -14,7 +14,7 @@ import math
 import numpy as np
 from PIL import Image, ImageDraw
 
-PAPER_W, PAPER_H = 760, 390
+PAPER_W, PAPER_H = 500, 390   # 꼬마 틀(소품 포함 폭 ~340)에 맞춘 크기
 CX = PAPER_W // 2
 
 
