@@ -5,6 +5,7 @@
 - 왼쪽 위: 지금 가진 잉크 (검정·빨강·초록·파랑), 가운데 위: 세이브 번호·진행 단계
 - 아래 버튼: 유닛 추가하기 / 잉크 섞기 / 내 유닛 / 출발하기! — 아직 만들지 않은 기능은 '곧 만들어요' 쪽지
 - 유닛 추가하기: 그 위에 유닛 그리기 화면(draw_mode)을 띄운다
+- 내 유닛: 그 위에 내 유닛 화면(units_mode)을 띄운다 — 가진 잉크 안에서 데리고 갈 유닛을 고른다
 - 타이틀로 / ESC: 저장하고 타이틀로. 나갈 때(창 닫기 포함) 저장한다
 """
 from pico2d import (clear_canvas, update_canvas, get_events, hide_cursor,
@@ -63,6 +64,11 @@ def add_unit():
     game_framework.push_mode(draw_mode)
 
 
+def my_units():
+    import units_mode   # units_mode 가 이 모듈을 불러 쓰므로 여기서 늦게 부른다
+    game_framework.push_mode(units_mode)
+
+
 def depart():
     global toast
     toast = ('아직 떠날 수 없어요  —  필드는 곧 만들어요!', TOAST_TIME)
@@ -85,7 +91,7 @@ def init():
     x0 = W / 2 - gap * 1.5
     buttons = [Button(x0 + gap * i, 62, f'button_{name}.png', f'button_{name}_hover.png', action, 0.4 * i, 'prepare')
                for i, (name, action) in enumerate((('add_unit', add_unit), ('mix', soon('잉크 섞기')),
-                                                   ('units', soon('내 유닛')), ('depart', depart)))]
+                                                   ('units', my_units), ('depart', depart)))]
     buttons.append(Button(W - 112, H - 52, 'button_back.png', 'button_back_hover.png', back_to_title, 1.3, 'prepare'))
     splashes = []
     t = scroll = 0.0
