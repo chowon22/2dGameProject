@@ -1,7 +1,8 @@
 """그린 유닛(프리셋) 카드 한 장 그리기. 유닛 그리기 화면과 내 유닛 화면이 함께 쓴다.
 
-카드 = 쪽지 + 그린 부분만 잘라 줄인 썸네일(오른쪽) + 틀 이름 + 왼쪽 세로 칸에 잉크병과 이 유닛에 드는 잉크.
-카드에 마우스를 올리면 오른쪽 위 모서리에 지우기 × 가 뜬다. 한 번 누르면 붉게 바뀌고, 한 번 더 누르면 지운다 (Deleter).
+카드 = 쪽지 + 무기를 손에 쥔 그림(unit_art.compose)을 잘라 줄인 썸네일 + 체형·틀 이름.
+드는 잉크는 카드에 마우스를 올렸을 때만 카드 아래 쪽지로 보인다 (draw_tip) — 색이 많아져도 잘리지 않게.
+카드에 마우스를 올리면 오른쪽 위 모서리에 지우기 × 도 뜬다. 한 번 누르면 붉게 바뀌고, 한 번 더 누르면 지운다 (Deleter).
 open_canvas() 뒤에만 쓸 수 있다.
 """
 import numpy as np
@@ -9,25 +10,26 @@ from PIL import Image as PILImage
 
 import frames
 import save_data
+import unit_art
 import text
 from assets import image
 from live_image import LiveImage
 
 INK = (86, 68, 106)
 CARD_W, CARD_H = 112, 92
-THUMB_W, THUMB_H = 58, 38       # 카드 안 그림 칸 (왼쪽 잉크 칸 옆, 아래 이름 칸 위)
+THUMB_W, THUMB_H = 84, 42       # 카드 안 그림 칸 (아래 이름 칸 위)
+NAMES = {'black': '검정', 'red': '빨강', 'green': '초록', 'blue': '파랑'}
 DEL_DX, DEL_DY, DEL_R = 48, 38, 16   # 지우기 × 자리 (카드 가운데에서), 누르는 반지름
 
 _thumbs = {}                    # (슬롯, 유닛 id, 크기) → 썸네일 (없으면 None)
 
 
-def make_thumb(path, max_w=THUMB_W, max_h=THUMB_H):
-    """그린 부분만 잘라 max_w x max_h 안에 맞게 줄인 그림."""
-    img = PILImage.open(path).convert('RGBA')
-    box = img.getbbox()
-    if not box:
+def make_thumb(unit, max_w=THUMB_W, max_h=THUMB_H):
+    """무기를 손에 쥔 그림을 max_w x max_h 안에 맞게 줄인 것."""
+    arr = unit_art.compose(unit, *unit_art.load(save_data.current['slot'], unit))
+    if arr is None:
         return None
-    img = img.crop(box)
+    img = PILImage.fromarray(arr, 'RGBA')
     k = min(max_w / img.width, max_h / img.height, 1.0)
     img = img.resize((max(1, round(img.width * k)), max(1, round(img.height * k))), PILImage.LANCZOS)
     return LiveImage(img.width, img.height, np.asarray(img))
@@ -37,10 +39,7 @@ def thumb(unit, size=(THUMB_W, THUMB_H)):
     """카드 썸네일. size 를 바꾸면 필드 미리보기용처럼 다른 크기로 (크기마다 따로 만들어 둔다)."""
     key = (save_data.current['slot'], unit['id'], size)
     if key not in _thumbs:
-        try:
-            _thumbs[key] = make_thumb(save_data.unit_path(*key[:2]), *size)
-        except OSError:
-            _thumbs[key] = None
+        _thumbs[key] = make_thumb(unit, *size)
     return _thumbs[key]
 
 
@@ -52,6 +51,31 @@ def forget(unit_id):
 
 def cost(unit):
     return sum(unit.get('ink', {}).values())
+
+
+def label(unit):
+    """카드 아래 이름: 체형 + 틀 (예: '큰 탱커')."""
+    if unit.get('frame') not in frames.IDS:
+        return ''
+    body = unit.get('body', 'medium')
+    if body == 'medium':
+        return frames.get(unit['frame'])['name']
+    return f'{frames.BODY_NAMES.get(body, "")} {frames.SHORT_NAMES[unit["frame"]]}'   # 좁은 카드라 줄인 이름
+
+
+def draw_tip(unit_id, cards):
+    """마우스를 올린 카드 아래에 드는 잉크 쪽지 (다른 카드보다 위에 그리도록 카드를 다 그린 뒤 부른다)."""
+    for unit, x, y in cards:
+        if unit['id'] != unit_id:
+            continue
+        ink = {c: n for c, n in unit.get('ink', {}).items() if n}
+        msg = '  ·  '.join(f'{NAMES.get(c, c)} {n}' for c, n in ink.items()) or '잉크 0'
+        w = max(120, 14 * len(msg) + 40)
+        note = image('prepare', 'toast.png')
+        tx, ty = x, y - CARD_H / 2 - 18   # 카드 바로 아래
+        note.draw(tx, ty, w, 50)
+        text.draw(msg, tx, ty + 1, 20, INK, 'c')
+        return
 
 
 def hit(x, y, mx, my):
@@ -80,13 +104,8 @@ def draw(unit, x, y, on=False, alpha=1.0, delete=None):
     _draw(image('draw', 'card_on.png' if on else 'card.png'), x, y, alpha)
     img = thumb(unit)
     if img:
-        _draw(img, x + 13, y + 11, alpha)
-    name = frames.get(unit['frame'])['name'] if unit.get('frame') in frames.IDS else ''
-    text.draw(name, x, y - 21, 15, INK, 'c', alpha=alpha)   # 쪽지 테두리(가운데에서 34px) 안쪽
-    ink = unit.get('ink') or {'black': 0}
-    main = max(ink, key=ink.get)   # 가장 많이 드는 색의 잉크병
-    _draw(image('prepare', f'ink_{main}.png'), x - 31, y + 19, alpha, 14, 16)
-    text.draw(str(cost(unit)), x - 31, y + 2, 15, INK, 'c', alpha=alpha)
+        _draw(img, x, y + 9, alpha)
+    text.draw(label(unit), x, y - 21, 15, INK, 'c', alpha=alpha)   # 쪽지 테두리(가운데에서 34px) 안쪽
     if delete:
         image('draw', 'card_del_confirm.png' if delete == 'confirm' else 'card_del.png').draw(x + DEL_DX, y + DEL_DY)
 
