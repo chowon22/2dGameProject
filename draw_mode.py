@@ -2,7 +2,7 @@
 
 위에서부터
 - 내 프리셋: 그려서 저장한 유닛. 누르면 그 그림과 틀이 종이에 올라와 이어 그리거나 고칠 수 있다
-- 틀: 탱커(바위 거북) / 근접 딜러(고양이) / 원거리 딜러(아기 새) / 서포터(토끼). 고르면 종이에 연필 점선 밑그림이 깔린다
+- 틀: 탱커(방패 기사) / 근접 딜러(검사) / 원거리 딜러(궁수) / 서포터(마법사). 고르면 종이에 연필 점선 밑그림이 깔린다
 - 잉크: 검정·빨강·초록·파랑 잉크병 + 지우개. 병 옆 숫자는 가진 잉크 (그려도 줄지 않는다)
 - 종이: 들어오자마자 바로 그릴 수 있다. 종이 위 커서 자리에는 지금 붓 색·굵기의 점이 보인다. 가진 잉크와 상관없이 어떤 색이든 마음껏 칠한다
   (잉크는 내 유닛에서 고를 때 따진다)
@@ -46,7 +46,7 @@ PAPER_T = PAPER_Y + frames.PAPER_H // 2     # 종이 윗변 (pico y)
 SIDE_X = 1080
 TOOLS = painter.COLORS + (painter.ERASER,)
 
-panel = paper_img = ink_ring = eraser_img = fade = toast_img = None
+panel = paper_img = ink_wave = eraser_img = fade = toast_img = None
 frame_imgs = {}
 ink_icons = {}
 guides = {}
@@ -158,11 +158,11 @@ def close():
 
 # ---------------------------------------------------------------- 모드
 def init():
-    global panel, paper_img, ink_ring, eraser_img, fade, toast_img, frame_imgs, ink_icons
+    global panel, paper_img, ink_wave, eraser_img, fade, toast_img, frame_imgs, ink_icons
     global guides, brush_tips, buttons, paper, paper_tex, tool, picked, painting, deleter, toast, t
     panel = image('draw', 'panel.png')
     paper_img = image('draw', 'paper.png')
-    ink_ring = image('draw', 'ink_ring.png')
+    ink_wave = image('draw', 'ink_wave.png')
     eraser_img = image('draw', 'eraser.png')
     fade = image('common', 'fade.png')
     toast_img = image('prepare', 'toast.png')
@@ -313,7 +313,7 @@ def draw_inks():
     for i, name in enumerate(TOOLS):
         x = ink_x(i)
         if name == tool:
-            ink_ring.draw(x, INK_Y - 25, 66, 30)   # 고른 병 바로 아래 가운데
+            ink_wave.draw(x + 2, INK_Y - 32)   # 고른 병 바로 아래 구불구불한 밑줄
         bob = 3 if name == tool else 0
         if name == painter.ERASER:
             eraser_img.draw(x, INK_Y + bob, 48, 48)
