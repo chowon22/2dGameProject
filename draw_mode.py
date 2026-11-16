@@ -3,9 +3,9 @@
 위에서부터
 - 내 프리셋: 그려서 저장한 유닛. 누르면 그 그림과 틀이 종이에 올라와 이어 그리거나 고칠 수 있다
 - 틀: 탱커 / 근접 딜러 / 원거리 딜러 / 서포터. 고르면 종이에 흐릿한 틀 실루엣이 깔린다
-- 잉크: 검정·빨강·초록·파랑 잉크병 + 지우개. 병 옆 숫자는 이 그림을 빼고 남는 잉크
-- 종이: 들어오자마자 바로 그릴 수 있다. 잉크가 모자라면 더 칠해지지 않는다 (PRD 9.1 #6)
-오른쪽: 저장하기(프리셋에 더하고 잉크를 뺀다) / 다 지우기 / 닫기
+- 잉크: 검정·빨강·초록·파랑 잉크병 + 지우개. 병 옆 숫자는 가진 잉크 (그려도 줄지 않는다)
+- 종이: 들어오자마자 바로 그릴 수 있다. 한 그림에 가진 잉크보다 많이는 칠해지지 않는다 (PRD 9.1 #6)
+오른쪽: 저장하기(프리셋에 더하고 이 유닛에 드는 잉크를 적어 둔다 — 가진 잉크는 그대로) / 다 지우기 / 닫기
 
 키: 1~4 잉크, E 지우개, ESC 닫기
 """
@@ -96,11 +96,6 @@ def owned():
     return save_data.current['ink'] if save_data.current else {c: 0 for c in painter.COLORS}
 
 
-def left_ink():
-    used = paper.ink_used()
-    return {c: owned().get(c, 0) - used[c] for c in painter.COLORS}
-
-
 def say(msg):
     global toast
     toast = (msg, TOAST_TIME)
@@ -141,9 +136,6 @@ def save_unit():
         say('아직 아무것도 그리지 않았어요')
         return
     used = paper.ink_used()
-    if not save_data.can_afford(save_data.current, used):
-        say('잉크가 모자라요')
-        return
     unit = save_data.add_unit(save_data.current, frame_id, paper.counts_dict(), used)
     paper.save_png(save_data.unit_path(save_data.current['slot'], unit['id']))
     save_data.save_current()
@@ -326,6 +318,10 @@ def draw_presets():
             img.draw(x, PRESET_Y + 8)
         name = frames.get(unit['frame'])['name'] if unit.get('frame') in frames.IDS else ''
         text.draw(name, x, PRESET_Y - 27, 17, INK, 'c')
+        # 이 유닛에 드는 잉크: 카드 안 왼쪽 위에 작은 잉크병 딱지
+        cost = sum(unit.get('ink', {}).values())
+        ink_icons['black'].draw(x - 36, PRESET_Y + 27, 15, 17)
+        text.draw(str(cost), x - 27, PRESET_Y + 26, 17, INK)
 
 
 def draw_frames():
@@ -336,7 +332,7 @@ def draw_frames():
 
 def draw_inks():
     text.draw('잉크', 46, INK_Y, 30, INK)
-    left = left_ink()
+    have = owned()
     for i, name in enumerate(TOOLS):
         x = ink_x(i)
         if name == tool:
@@ -350,7 +346,7 @@ def draw_inks():
             icon.opacify(0.35)
         icon.draw(x, INK_Y + bob, 42, 48)
         icon.opacify(1)
-        text.draw(str(left[name]), x + 26, INK_Y - 2, 28, INK)
+        text.draw(str(have.get(name, 0)), x + 26, INK_Y - 2, 28, INK)
     f = frames.get(frame_id)
     text.draw(f'{f["name"]}:  검정 → {f["stat"]} ↑  ·  색 → 원소', ink_x(len(TOOLS)) - 10, INK_Y, 22, (130, 110, 150))
 

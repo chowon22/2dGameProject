@@ -6,7 +6,7 @@ pico2d 와 무관한 순수 로직이라 따로 테스트할 수 있다 (tests/t
 - load(slot) / summary(slot): 불러오기 / 선택 화면에 보일 요약 (없으면 None)
 - save_current(): 지금 슬롯을 저장 (플레이 시간을 더한다)
 - delete(slot): 지우기 (그 슬롯의 유닛 그림도 함께)
-- add_unit(data, frame, counts, ink_used): 그린 유닛을 프리셋으로 적고 잉크를 뺀다. 그림은 unit_path() 에 저장
+- add_unit(data, frame, counts, ink_used): 그린 유닛을 프리셋으로 적는다 (드는 잉크만 기록, 가진 잉크는 그대로). 그림은 unit_path() 에 저장
 """
 import json
 import os
@@ -109,17 +109,9 @@ def unit_path(slot, unit_id, folder=None):
     return os.path.join(units_dir(slot, folder), f'unit_{unit_id}.png')
 
 
-def can_afford(data, ink_used):
-    return all(data['ink'].get(c, 0) >= n for c, n in ink_used.items())
-
-
 def add_unit(data, frame, counts, ink_used, folder=None):
-    """유닛 기록을 더하고 그만큼 잉크를 뺀다. 잉크가 모자라면 ValueError.
+    """유닛 기록을 더한다. 가진 잉크는 줄지 않고, 이 유닛을 꺼낼 때 드는 잉크(ink_used)만 적어 둔다.
     그림 PNG 는 부른 쪽이 unit_path(slot, 돌려준 id) 에 저장한다 (폴더는 여기서 만들어 둔다)."""
-    if not can_afford(data, ink_used):
-        raise ValueError('not enough ink')
-    for c, n in ink_used.items():
-        data['ink'][c] -= n
     unit_id = max((u['id'] for u in data['units']), default=0) + 1
     unit = {'id': unit_id, 'frame': frame, 'counts': dict(counts), 'ink': dict(ink_used)}
     data['units'].append(unit)

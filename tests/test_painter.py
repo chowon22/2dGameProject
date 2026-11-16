@@ -99,19 +99,14 @@ class UnitSaveTest(unittest.TestCase):
         self.tmp.cleanup()
         save_data.current = None
 
-    def test_add_unit_spends_ink(self):
+    def test_add_unit_records_cost_without_spending(self):
         data = save_data.new_game(1, self.dir, now=0.0)
         unit = save_data.add_unit(data, 'tank', {'black': 250}, {'black': 10}, self.dir)
         self.assertEqual(unit['id'], 1)
-        self.assertEqual(data['ink']['black'], save_data.START_INK - 10)
+        self.assertEqual(unit['ink'], {'black': 10})
+        self.assertEqual(data['ink']['black'], save_data.START_INK)   # 가진 잉크는 그대로
         self.assertTrue(os.path.isdir(save_data.units_dir(1, self.dir)))
         self.assertEqual(save_data.add_unit(data, 'melee', {}, {}, self.dir)['id'], 2)
-
-    def test_add_unit_needs_ink(self):
-        data = save_data.new_game(1, self.dir, now=0.0)
-        with self.assertRaises(ValueError):
-            save_data.add_unit(data, 'tank', {'red': 25}, {'red': 1}, self.dir)
-        self.assertEqual(data['units'], [])
 
     def test_delete_removes_unit_images(self):
         data = save_data.new_game(3, self.dir, now=0.0)
