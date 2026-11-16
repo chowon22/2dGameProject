@@ -1,8 +1,8 @@
 """준비 화면에서 내 유닛(필드에 놓은 유닛)이 소년 뒤를 따라 걷는 모습.
 
 내 유닛 화면의 자리 그대로: 앞줄이 소년 가까이, 뒷줄이 그 뒤. 줄(먼 쪽 ~ 가까운 쪽)마다 조금 위아래·비스듬히.
-그린 그림을 몸과 무기로 나눠(unit_rig) 무기는 손에 쥐고, 자리마다 박자를 달리해 통통 튀며 걷는다.
-걸음에 맞춰 무기를 쥔 손을 축으로 흔든다 (칼은 크게, 방패는 조금).
+그린 그림을 틀에 맞춰 마디로 나눠(unit_rig) 다리를 번갈아 내딛고 팔을 흔들며 걷는다. 무기는 오른손에 쥐고 함께 흔들린다.
+자리마다 걸음 박자를 조금씩 다르게.
 """
 import math
 
@@ -14,7 +14,6 @@ LANE_DY = (16, 0, -16)              # 줄(먼 쪽 → 가까운 쪽)마다 발 �
 LANE_DX = (34, 0, -34)
 SCALE = 0.25                        # 걷는 그림 배율 (체형마다 크기가 다르게 보이도록 모두 같은 배율)
 STEP = 6.5                          # 걸음 박자 (라디안/초)
-SWAY = {'tank': 0.06, 'melee': 0.22, 'ranged': 0.08, 'support': 0.14}   # 무기 흔드는 폭 (라디안)
 
 
 def slot_pos(slot, boy_x, ground):
@@ -37,9 +36,6 @@ def draw(t, boy_x, ground, shadow=None):
             continue
         x, y = slot_pos(slot, boy_x, ground)
         phase = t * STEP + slot * 1.3
-        bob = abs(math.sin(phase)) * 6
-        tilt = math.sin(phase) * 0.05
-        sway = math.sin(phase + 0.6) * SWAY.get(unit.get('frame'), 0.1)
         if shadow:
-            shadow.draw(x, y - 2, r.w * 0.8, shadow.h * 0.45)
-        r.draw(x, y + bob, tilt, sway)
+            shadow.draw(x, y - 2, r.w * 0.7, shadow.h * 0.45)
+        r.draw(x, y, 'walk', phase)   # 다리를 번갈아 내딛고 팔을 흔들며, 무기는 오른손에 쥐고
