@@ -1,9 +1,9 @@
 """그린 유닛 그림 다루기 (pico2d 와 무관한 순수 로직, PIL·numpy).
 
-유닛 그림은 두 장: 사람 종이(unit_<id>.png) + 무기 종이(unit_<id>_gear.png).
-- load(slot, unit): (사람, 무기) RGBA 배열 — 무기 그림이 없는 예전 유닛은 빈 무기
-- pieces(unit, person, gear): 무기를 묶음(활·화살 …)으로 나누고, 손에 쥐었을 때의 가운데·각도까지
-- compose(unit, person, gear): 무기를 손에 쥔 한 장짜리 그림 (카드 썸네일·필드 미리보기용)
+유닛 그림은 사람 종이(unit_<id>.png) 한 장 + 무기 종이마다 한 장(unit_<id>_gear<n>.png, 원딜은 활·화살 두 장).
+- load(slot, unit): (사람, [무기 …]) RGBA 배열 — 그 틀·체형의 종이 크기로 맞춘다. 없는 그림은 빈 종이
+- pieces(unit, gears): 무기마다 손에 쥐었을 때의 가운데·쥔 점·각도
+- compose(unit, person, gears): 무기를 손에 쥔 한 장짜리 그림 (카드 썸네일·필드 미리보기용)
 """
 import math
 
@@ -16,17 +16,25 @@ import save_data
 
 def frame_of(unit):
     fid = unit.get('frame')
-    return (fid if fid in frames.IDS else None), unit.get('body', 'medium')
+    body = unit.get('body', 'medium')
+    return (fid if fid in frames.IDS else None), (body if body in frames.BODIES else 'medium')
+
+
+def _read(path, size):
+    w, h = size
+    try:
+        return frames.fit(np.asarray(Image.open(path).convert('RGBA')), w, h)
+    except OSError:
+        return np.zeros((h, w, 4), np.uint8)
 
 
 def load(slot, unit, folder=None):
-    def read(path, w):
-        try:
-            return frames.fit(np.asarray(Image.open(path).convert('RGBA')), w)
-        except OSError:
-            return np.zeros((frames.PAPER_H, w, 4), np.uint8)
-    return (read(save_data.unit_path(slot, unit['id'], folder), frames.PERSON_W),
-            read(save_data.gear_path(slot, unit['id'], folder), frames.GEAR_W))
+    fid, body = frame_of(unit)
+    size = frames.get(fid, body)['size'] if fid else frames.paper_size(body)
+    person = _read(save_data.unit_path(slot, unit['id'], folder), size)
+    gears = [_read(save_data.gear_path(slot, unit['id'], folder, i), g['size'])
+             for i, g in enumerate(frames.get(fid, body)['gear'])] if fid else []
+    return person, gears
 
 
 def bbox(rgba):
@@ -36,30 +44,30 @@ def bbox(rgba):
     return int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1
 
 
-def pieces(unit, gear):
-    """무기 묶음마다 {'img': 잘라 낸 RGBA, 'center': 손에 쥐었을 때 가운데(사람 종이 좌표), 'to': 쥔 점, 'angle'}.
-    빈 묶음은 뺀다."""
+def pieces(unit, gears):
+    """무기마다 {'img': 잘라 낸 RGBA, 'center': 손에 쥐었을 때 가운데(사람 종이 좌표), 'to': 쥔 점, 'angle'}.
+    빈 무기 종이는 뺀다."""
     fid, body = frame_of(unit)
     if fid is None:
         return []
     out = []
-    for i, piece in enumerate(frames.split_gear(gear, fid)):
-        b = bbox(piece)
+    for i, (g, rgba) in enumerate(zip(frames.get(fid, body)['gear'], gears)):
+        b = bbox(rgba)
         if not b:
             continue
-        g = frames.get(fid, body)['gear'][i]
         c = ((b[0] + b[2]) / 2, (b[1] + b[3]) / 2)
-        out.append({'img': piece[b[1]:b[3], b[0]:b[2]], 'center': frames.held(fid, i, c, body),
+        out.append({'img': rgba[b[1]:b[3], b[0]:b[2]], 'center': frames.held(fid, i, c, body),
                     'to': g['to'], 'angle': g['angle']})
     return out
 
 
-def compose(unit, person, gear):
+def compose(unit, person, gears):
     """무기를 손에 쥔 한 장 (RGBA 배열, 그린 부분만 잘라서). 아무것도 없으면 None."""
-    pad = 220
-    canvas = Image.new('RGBA', (frames.PERSON_W + pad * 2, frames.PAPER_H + pad * 2), (0, 0, 0, 0))
+    pad = 260
+    h, w = person.shape[:2]
+    canvas = Image.new('RGBA', (w + pad * 2, h + pad * 2), (0, 0, 0, 0))
     canvas.alpha_composite(Image.fromarray(person, 'RGBA'), (pad, pad))
-    for p in pieces(unit, gear):
+    for p in pieces(unit, gears):
         img = Image.fromarray(np.ascontiguousarray(p['img']), 'RGBA')
         if p['angle']:
             img = img.rotate(math.degrees(p['angle']), resample=Image.BICUBIC, expand=True)
