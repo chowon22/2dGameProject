@@ -4,7 +4,8 @@
 - 내 프리셋: 그려서 저장한 유닛. 누르면 그 그림과 틀이 종이에 올라와 이어 그리거나 고칠 수 있다
 - 틀: 탱커 / 근접 딜러 / 원거리 딜러 / 서포터. 고르면 종이에 흐릿한 틀 실루엣이 깔린다
 - 잉크: 검정·빨강·초록·파랑 잉크병 + 지우개. 병 옆 숫자는 가진 잉크 (그려도 줄지 않는다)
-- 종이: 들어오자마자 바로 그릴 수 있다. 한 그림에 가진 잉크보다 많이는 칠해지지 않는다 (PRD 9.1 #6)
+- 종이: 들어오자마자 바로 그릴 수 있다. 가진 잉크와 상관없이 어떤 색이든 마음껏 칠한다
+  (잉크는 내 유닛에서 고를 때 따진다)
 오른쪽: 저장하기(프리셋에 더하고 이 유닛에 드는 잉크를 적어 둔다 — 가진 잉크는 그대로) / 다 지우기 / 닫기
 
 키: 1~4 잉크, E 지우개, ESC 닫기
@@ -100,9 +101,6 @@ def say(msg):
 # ---------------------------------------------------------------- 행동
 def pick_tool(name):
     global tool
-    if name != painter.ERASER and owned().get(name, 0) <= 0:
-        say('아직 없는 색이에요.  몬스터에게서 되찾아 와요!')
-        return
     tool = name
 
 
@@ -220,9 +218,7 @@ def click(mx, my):
     p = to_paper(mx, my)
     if p:
         painting = True
-        paper.begin(*p, tool, owned())
-        if paper.blocked and tool != painter.ERASER:
-            say('잉크가 모자라요')
+        paper.begin(*p, tool)
 
 
 def handle_events():
@@ -244,13 +240,10 @@ def handle_events():
             for b in buttons:
                 b.mouse_move(mx, my)
             if painting:
-                was = paper.blocked
                 # 종이 밖으로 나가도 가장자리까지는 이어 칠한다
                 px = min(max(mx - PAPER_L, -1), frames.PAPER_W)
                 py = min(max(PAPER_T - my, -1), frames.PAPER_H)
-                paper.drag(px, py, tool, owned())
-                if paper.blocked and not was and tool != painter.ERASER:
-                    say('잉크가 모자라요')
+                paper.drag(px, py, tool)
         elif event.type == SDL_MOUSEBUTTONDOWN and event.button == SDL_BUTTON_LEFT:
             if t > FADE_IN:
                 click(*title_mode.to_canvas(event))
@@ -304,11 +297,7 @@ def draw_inks():
         if name == painter.ERASER:
             eraser_img.draw(x, INK_Y + bob, 48, 48)
             continue
-        icon = ink_icons[name]
-        if owned().get(name, 0) <= 0:
-            icon.opacify(0.35)
-        icon.draw(x, INK_Y + bob, 42, 48)
-        icon.opacify(1)
+        ink_icons[name].draw(x, INK_Y + bob, 42, 48)
         text.draw(str(have.get(name, 0)), x + 26, INK_Y - 2, 28, INK)
     f = frames.get(frame_id)
     text.draw(f'{f["name"]}:  검정 → {f["stat"]} ↑  ·  색 → 원소', ink_x(len(TOOLS)) - 10, INK_Y, 22, (130, 110, 150))
