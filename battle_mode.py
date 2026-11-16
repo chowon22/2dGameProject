@@ -4,7 +4,7 @@
 - 내 차례: 앞줄부터 아군이 하나씩 (발밑이 노랗게) — 적을 누르면 달려가 휘둘러 색을 흡수(피해).
   서포터는 아군을 누르면 치료 + 다음 공격 힘 보태기, 적을 누르면 약하게 공격. 넘기기로 건너뛸 수 있다
 - 적 차례: 적이 하나씩 아군을 공격 (탱커가 공격을 끌어온다)
-- 체력바 대신 그림이 흐려진다 (PRD 1.4: 그림이 곧 체력). 발밑에 남은 체력 숫자
+- 체력바 대신 그림이 흐려진다 (PRD 1.4: 그림이 곧 체력): 맞으면 바로 반투명, 체력이 줄수록 더 흐리게. 발밑에 남은 체력 숫자
 - 끝: 승리면 되찾은 잉크를 받고 다음 스테이지가 열린다. 돌아가기 → 스테이지 고르기
 - 도망가기: 아무것도 받지 않고 스테이지 고르기로
 """
@@ -38,6 +38,8 @@ MONSTER_SCALE = 0.72
 ACT_TIME, HIT_AT = 0.62, 0.32              # 공격 한 번 걸리는 시간, 맞는 순간
 LUNGE = 0.42                               # 상대 쪽으로 다가가는 정도
 FADE_IN = 0.3
+HURT_MAX, HURT_MIN = 0.8, 0.15                # 맞은 뒤 투명도: 체력 가득 → 거의 없음
+HIT_FLASH = 0.3                            # 맞는 순간 흔들리며 흐려지는 시간
 
 stage_id = None
 battle_state = None                        # battle.Battle
@@ -183,7 +185,7 @@ def apply_hit():
         dmg, mul = battle_state.attack(a['actor'], a['target'])
     else:
         dmg, mul = battle_state.enemy_hit(a['actor'], a['target'])
-    tv['shake'] = 0.3
+    tv['shake'] = HIT_FLASH
     popups.append([f'-{dmg}', tv['x'], tv['y'] + 110, 1.0, (210, 70, 80)])
     if mul > 1:
         popups.append(['상성이 좋아요!', tv['x'], tv['y'] + 140, 1.0, (220, 140, 40)])
@@ -285,9 +287,21 @@ def offset(v):
     return dx, dy
 
 
+def opacity(v):
+    """그림이 곧 체력 (PRD 1.4): 한 번이라도 맞으면 바로 반투명해지고, 체력이 줄수록 더 흐려진다.
+    맞는 순간에는 잠깐 더 흐려졌다가 돌아오고, 쓰러지면 사라진다."""
+    f = v['f']
+    if not f.alive:
+        return max(0.0, HURT_MIN - v['dead_t'] * 0.5)
+    a = 1.0 if f.hp >= f.max_hp else HURT_MIN + (HURT_MAX - HURT_MIN) * f.hp / f.max_hp
+    if v.get('shake'):
+        a *= 0.45 + 0.55 * (1 - v['shake'] / HIT_FLASH)   # 맞는 순간 확 흐려졌다가 돌아옴
+    return a
+
+
 def draw_fighter(v):
     f = v['f']
-    a = 0.3 + 0.7 * f.hp / f.max_hp if f.alive else max(0.0, 0.3 - v['dead_t'] * 0.6)
+    a = opacity(v)
     if a <= 0:
         return
     dx, dy = offset(v)
