@@ -5,10 +5,12 @@ pico2d 와 무관한 순수 로직이라 따로 테스트할 수 있다 (tests/t
 - new_game(slot): 새 세이브를 만들어 저장하고 지금 슬롯으로 고른다
 - load(slot) / summary(slot): 불러오기 / 선택 화면에 보일 요약 (없으면 None)
 - save_current(): 지금 슬롯을 저장 (플레이 시간을 더한다)
-- delete(slot): 지우기
+- delete(slot): 지우기 (그 슬롯의 유닛 그림도 함께)
+- add_unit(data, frame, counts, ink_used): 그린 유닛을 프리셋으로 적고 잉크를 뺀다. 그림은 unit_path() 에 저장
 """
 import json
 import os
+import shutil
 import time
 
 DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'saves')
@@ -41,7 +43,7 @@ def blank(slot, now=None):
         'stage': 0,           # 여정 진행 (0 = 아직 첫 필드 전)
         'intro_seen': False,  # 도입 이야기(컷씬)를 봤는가 — 보기 전이면 준비 화면 전에 보여 준다
         'ink': {'black': START_INK, 'red': 0, 'green': 0, 'blue': 0},
-        'units': [],          # 그린 유닛 (PNG 경로·틀·색 비율 …) — 준비 화면이 생기면 채운다
+        'units': [],          # 그린 유닛 (프리셋): {'id', 'frame', 'counts', 'ink'} — 그림은 unit_path(slot, id)
     }
 
 
@@ -83,6 +85,7 @@ def delete(slot, folder=None):
         os.remove(_path(slot, folder))
     except FileNotFoundError:
         pass
+    shutil.rmtree(units_dir(slot, folder), ignore_errors=True)
     global current
     if current and current['slot'] == slot:
         current = None
@@ -95,6 +98,33 @@ def summary(slot, folder=None):
         return None
     return {'slot': slot, 'stage': data['stage'], 'play_time': data['play_time'], 'saved_at': data['saved_at'],
             'ink_total': sum(data['ink'].values())}
+
+
+# ---------------------------------------------------------------- 그린 유닛 (프리셋)
+def units_dir(slot, folder=None):
+    return os.path.join(folder or DIR, f'slot_{slot}_units')
+
+
+def unit_path(slot, unit_id, folder=None):
+    return os.path.join(units_dir(slot, folder), f'unit_{unit_id}.png')
+
+
+def can_afford(data, ink_used):
+    return all(data['ink'].get(c, 0) >= n for c, n in ink_used.items())
+
+
+def add_unit(data, frame, counts, ink_used, folder=None):
+    """유닛 기록을 더하고 그만큼 잉크를 뺀다. 잉크가 모자라면 ValueError.
+    그림 PNG 는 부른 쪽이 unit_path(slot, 돌려준 id) 에 저장한다 (폴더는 여기서 만들어 둔다)."""
+    if not can_afford(data, ink_used):
+        raise ValueError('not enough ink')
+    for c, n in ink_used.items():
+        data['ink'][c] -= n
+    unit_id = max((u['id'] for u in data['units']), default=0) + 1
+    unit = {'id': unit_id, 'frame': frame, 'counts': dict(counts), 'ink': dict(ink_used)}
+    data['units'].append(unit)
+    os.makedirs(units_dir(data['slot'], folder), exist_ok=True)
+    return unit
 
 
 # ---------------------------------------------------------------- 지금 하고 있는 세이브
