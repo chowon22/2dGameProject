@@ -4,6 +4,8 @@ import sys
 import tempfile
 import unittest
 
+import numpy as np
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import frames  # noqa: E402
 import painter  # noqa: E402
@@ -82,11 +84,10 @@ class FramesTest(unittest.TestCase):
             self.assertEqual(m.shape, (frames.PAPER_H, frames.PAPER_W))
             self.assertEqual(set(m.ravel()) - {0}, set(range(1, len(frames.part_names(fid)) + 1)))
 
-    def test_silhouette_is_faint(self):
-        s = frames.silhouette('tank')
-        self.assertEqual(s.shape, (frames.PAPER_H, frames.PAPER_W, 4))
-        self.assertGreater(s[..., 3].max(), 0)
-        self.assertLess(s[..., 3].max(), 200)
+    def test_every_part_shows(self):
+        for fid in frames.IDS:   # 뒤 부위에 완전히 가려진 부위가 없어야 한다
+            counts = np.bincount(frames.part_mask(fid).ravel(), minlength=len(frames.part_names(fid)) + 1)
+            self.assertTrue((counts[1:] > 50).all(), fid)
 
 
 class UnitSaveTest(unittest.TestCase):
