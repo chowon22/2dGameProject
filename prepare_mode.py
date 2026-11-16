@@ -5,6 +5,7 @@
 - 왼쪽 위: 지금 가진 잉크 (검정·빨강·초록·파랑), 가운데 위: 세이브 번호·진행 단계
 - 아래 버튼: 유닛 추가하기 / 잉크 섞기 / 내 유닛 / 출발하기! — 아직 만들지 않은 기능은 '곧 만들어요' 쪽지
 - 내 유닛 화면에서 필드에 놓은 유닛들이 같은 자리 그대로 소년 뒤를 따라 걷는다 (party_view)
+- 출발하기!: 월드 고르기(world_mode) → 스테이지 → 출전 준비 → 전투
 - 유닛 추가하기: 그 위에 유닛 그리기 화면(draw_mode)을 띄운다
 - 내 유닛: 그 위에 내 유닛 화면(units_mode)을 띄운다 — 가진 잉크 안에서 데리고 갈 유닛을 고른다
 - 타이틀로 / ESC: 저장하고 타이틀로. 나갈 때(창 닫기 포함) 저장한다
@@ -72,8 +73,8 @@ def my_units():
 
 
 def depart():
-    global toast
-    toast = ('아직 떠날 수 없어요  —  필드는 곧 만들어요!', TOAST_TIME)
+    import world_mode   # world_mode 가 이 모듈을 불러 쓰므로 여기서 늦게 부른다
+    game_framework.push_mode(world_mode)
 
 
 def back_to_title():
