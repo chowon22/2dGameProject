@@ -4,6 +4,7 @@
   검은 잉크통을 안은 소년이 왼쪽에서 달려 들어와 오른쪽을 향해 계속 달린다 (3프레임 달리기)
 - 왼쪽 위: 지금 가진 잉크 (검정·빨강·초록·파랑), 가운데 위: 세이브 번호·진행 단계
 - 아래 버튼: 유닛 추가하기 / 잉크 섞기 / 내 유닛 / 출발하기! — 아직 만들지 않은 기능은 '곧 만들어요' 쪽지
+- 유닛 추가하기: 그 위에 유닛 그리기 화면(draw_mode)을 띄운다
 - 타이틀로 / ESC: 저장하고 타이틀로. 나갈 때(창 닫기 포함) 저장한다
 """
 from pico2d import (clear_canvas, update_canvas, get_events, hide_cursor,
@@ -57,6 +58,11 @@ def soon(name):
     return show
 
 
+def add_unit():
+    import draw_mode   # draw_mode 가 이 모듈을 불러 쓰므로 여기서 늦게 부른다
+    game_framework.push_mode(draw_mode)
+
+
 def depart():
     global toast
     toast = ('아직 떠날 수 없어요  —  필드는 곧 만들어요!', TOAST_TIME)
@@ -78,7 +84,7 @@ def init():
     gap = 272
     x0 = W / 2 - gap * 1.5
     buttons = [Button(x0 + gap * i, 62, f'button_{name}.png', f'button_{name}_hover.png', action, 0.4 * i, 'prepare')
-               for i, (name, action) in enumerate((('add_unit', soon('유닛 추가하기')), ('mix', soon('잉크 섞기')),
+               for i, (name, action) in enumerate((('add_unit', add_unit), ('mix', soon('잉크 섞기')),
                                                    ('units', soon('내 유닛')), ('depart', depart)))]
     buttons.append(Button(W - 112, H - 52, 'button_back.png', 'button_back_hover.png', back_to_title, 1.3, 'prepare'))
     splashes = []
@@ -179,13 +185,18 @@ def draw_toast():
     text.draw(msg, W / 2, 472, 30, INK, 'c', alpha=a)
 
 
-def draw():
-    clear_canvas()
+def draw_scene():
+    """배경 층과 소년 (유닛 그리기 화면이 떠 있을 때 뒤에 깔기도 한다)."""
     layers['sky'].draw(W / 2, H / 2)
     draw_layer('far', H / 2)
     draw_layer('mid', H / 2)
     draw_layer('ground', layers['ground'].h / 2)
     draw_boy()
+
+
+def draw():
+    clear_canvas()
+    draw_scene()
     for b in buttons:
         b.draw()
     draw_hud()
