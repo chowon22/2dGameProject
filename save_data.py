@@ -7,6 +7,7 @@ pico2d 와 무관한 순수 로직이라 따로 테스트할 수 있다 (tests/t
 - save_current(): 지금 슬롯을 저장 (플레이 시간을 더한다)
 - delete(slot): 지우기 (그 슬롯의 유닛 그림도 함께)
 - add_unit(data, frame, counts, ink_used): 그린 유닛을 프리셋으로 적는다 (드는 잉크만 기록, 가진 잉크는 그대로). 그림은 unit_path() 에 저장
+- delete_unit(data, id): 프리셋 지우기 (그림 파일도, 내 유닛에 고른 것도 함께)
 - party: 내 유닛 화면에서 고른 유닛 (프리셋 id 목록, 같은 프리셋을 여러 번 고를 수 있다). 드는 잉크 합이 가진 잉크를 넘지 않게 can_add() 로 막는다
 """
 import json
@@ -119,6 +120,19 @@ def add_unit(data, frame, counts, ink_used, folder=None):
     data['units'].append(unit)
     os.makedirs(units_dir(data['slot'], folder), exist_ok=True)
     return unit
+
+
+def delete_unit(data, unit_id, folder=None):
+    """프리셋을 지운다. 내 유닛에 고른 것도 빠지고 그림 파일도 지운다. 없으면 False."""
+    if not find_unit(data, unit_id):
+        return False
+    data['units'] = [u for u in data['units'] if u['id'] != unit_id]
+    data['party'] = [i for i in data['party'] if i != unit_id]
+    try:
+        os.remove(unit_path(data['slot'], unit_id, folder))
+    except FileNotFoundError:
+        pass
+    return True
 
 
 PARTY_MAX = 6

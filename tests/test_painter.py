@@ -122,6 +122,20 @@ class UnitSaveTest(unittest.TestCase):
         self.assertEqual(data['party'], [small['id']])
         self.assertTrue(save_data.add_to_party(data, small['id']))    # 같은 프리셋 여러 번
 
+    def test_delete_unit(self):
+        data = save_data.new_game(1, self.dir, now=0.0)
+        a = save_data.add_unit(data, 'tank', {}, {'black': 1}, self.dir)
+        b = save_data.add_unit(data, 'melee', {}, {'black': 1}, self.dir)
+        open(save_data.unit_path(1, a['id'], self.dir), 'wb').close()
+        save_data.add_to_party(data, a['id'])
+        save_data.add_to_party(data, b['id'])
+        save_data.add_to_party(data, a['id'])
+        self.assertTrue(save_data.delete_unit(data, a['id'], self.dir))
+        self.assertEqual([u['id'] for u in data['units']], [b['id']])
+        self.assertEqual(data['party'], [b['id']])                     # 고른 것도 빠진다
+        self.assertFalse(os.path.exists(save_data.unit_path(1, a['id'], self.dir)))
+        self.assertFalse(save_data.delete_unit(data, a['id'], self.dir))
+
     def test_party_max(self):
         data = save_data.new_game(1, self.dir, now=0.0)
         u = save_data.add_unit(data, 'tank', {}, {'black': 1}, self.dir)
