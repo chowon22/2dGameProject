@@ -5,7 +5,7 @@
 - card / card_on / card_empty: 프리셋(내가 그린 유닛) 카드
 - guide_<id>: 종이에 깔리는 틀 밑그림 — 역할별 귀여운 생물(frames.py)을 삐뚤빼뚤한 연필 점선으로
 - frame_<id> / frame_<id>_on: 틀 고르기 카드 (밑그림 + 이름)
-- ink_ring: 고른 잉크 아래 동그라미, eraser: 지우개
+- ink_wave: 고른 잉크 아래 구불구불한 밑줄 (형광펜처럼), eraser: 지우개
 - tab_<all|틀 id> / _on: 내 유닛 화면의 프리셋 나누기 칸 (전체·탱커·근접 딜러·원거리 딜러·서포터)
 - card_del / card_del_confirm: 프리셋 카드 모서리의 지우기 × (한 번 누르면 붉게 → 한 번 더 누르면 지움)
 - button_save / button_clear / button_close / button_unequip (+ _hover)
@@ -203,11 +203,12 @@ def card_del(confirm):
     return sh.result()
 
 
-def ink_ring():
-    sh = Sheet(84, 40, seed=950)
-    sh.line = PLUM
-    sh.wash(42, 20, 34, 12, PASTEL['lemon'], alpha=200, layers=3, blur=3)
-    sh.stroke(ellipse_points(42, 20, 34, 12), 2.6, amp=0.6)
+def ink_wave():
+    w, h = 76, 22
+    sh = Sheet(w, h, seed=951)
+    pts = [(8 + (w - 16) * i / 40, h / 2 + 4.2 * math.sin(i / 40 * math.pi * 3)) for i in range(41)]
+    sh.stroke(pts, 7.0, color=(246, 206, 92), alpha=210, amp=0.3, taper=False)      # 노란 형광펜
+    sh.stroke(pts, 2.4, color=(214, 160, 52), alpha=200, amp=0.3)                   # 가운데 진한 선
     return sh.result()
 
 
@@ -244,7 +245,7 @@ def main():
             save(tab(i, label, tint, on), f'tab_{tid}{"_on" if on else ""}.png')
     save(card_del(False), 'card_del.png')
     save(card_del(True), 'card_del_confirm.png')
-    save(ink_ring(), 'ink_ring.png')
+    save(ink_wave(), 'ink_wave.png')
     save(eraser(), 'eraser.png')
     for i, (name, label, tint, size) in enumerate(BUTTONS):
         for hover in (False, True):
