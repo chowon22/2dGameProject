@@ -1,9 +1,10 @@
 """유닛 그리기 화면(draw_mode) 이미지 생성 → image/draw/
 
 - panel: 화면을 덮는 커다란 수채화 종이 판
-- paper: 그림을 그리는 흰 도화지 (가운데 PAPER_W x PAPER_H 가 실제로 칠하는 곳)
+- paper_person / paper_gear: 사람·무기를 그리는 흰 도화지 두 장
+- body_<체형> / _on: 체형 고르기 칸 (작은·보통·큰)
 - card / card_on / card_empty: 프리셋(내가 그린 유닛) 카드
-- guide_<id>: 종이에 깔리는 틀 밑그림 — 역할별 귀여운 생물(frames.py)을 삐뚤빼뚤한 연필 점선으로
+- guide_person_<역할>_<체형> / guide_gear_<역할>: 두 종이에 깔리는 틀 밑그림 (frames.py) — 삐뚤빼뚤한 연필 점선
 - frame_<id> / frame_<id>_on: 틀 고르기 카드 (밑그림 + 이름)
 - ink_wave: 고른 잉크 아래 펜으로 쓱 그은 검정 밑줄, eraser: 지우개
 - tab_<all|틀 id> / _on: 내 유닛 화면의 프리셋 나누기 칸 (전체·탱커·근접 딜러·원거리 딜러·서포터)
@@ -62,9 +63,10 @@ def panel():
                 fill_alpha=236, line=4.0, r=30)
 
 
-def paper():
-    w, h = frames.PAPER_W + PAPER_MARGIN * 2, frames.PAPER_H + PAPER_MARGIN * 2
-    sh = Sheet(w, h, seed=910)
+def paper(pw):
+    """흰 도화지 한 장 (가운데 pw x PAPER_H 가 실제로 칠하는 곳)."""
+    w, h = pw + PAPER_MARGIN * 2, frames.PAPER_H + PAPER_MARGIN * 2
+    sh = Sheet(w, h, seed=910 + pw)
     sh.line = PLUM
     # 살짝 기운 그림자 → 흰 도화지
     shadow = pastel.wobbly_box(10, 14, w - 4, h - 2, 10, sh.rng, amp=1.0)
@@ -123,18 +125,18 @@ def _dashes(points, keep=None):
     return [d for d in out if len(d) > 1]
 
 
-def guide(frame, alpha=170, width=3.0, fill_alpha=22, color=GUIDE_LINE):
+def guide(parts, details, w, seed, alpha=170, width=3.0, fill_alpha=22, color=GUIDE_LINE):
     """틀 밑그림: 부위들을 합친 바깥 윤곽 + 무늬를 연필 점선으로, 안은 아주 옅게."""
-    w, h = frames.PAPER_W, frames.PAPER_H
-    sh = Sheet(w, h, seed=1100 + frames.IDS.index(frame['id']))
+    h = frames.PAPER_H
+    sh = Sheet(w, h, seed=seed)
     sh.line = color
-    parts = frame['parts']
     masks = []
     for part in parts:
         m = Image.new('L', (w, h), 0)
         ImageDraw.Draw(m).polygon(frames.outline(part), fill=255)
         masks.append(np.asarray(m.filter(ImageFilter.MinFilter(5))) > 0)   # 조금 줄인 안쪽
-    union = np.asarray(Image.fromarray(((frames.part_mask(frame['id']) > 0) * 255).astype(np.uint8)))
+    union = np.asarray(Image.fromarray((np.any(masks, axis=0) * 255).astype(np.uint8)).filter(
+        ImageFilter.MaxFilter(5)))
     p = Sheet(w, h, seed=1)
     p.fill_poly([(0, 0), (w, 0), (w, h), (0, h)], color, fill_alpha)
     sh.masked(p, Image.fromarray(union))
@@ -146,7 +148,7 @@ def guide(frame, alpha=170, width=3.0, fill_alpha=22, color=GUIDE_LINE):
             return not any(m[yi, xi] for m in others)
         for d in _dashes(frames.outline(part), keep):
             sh.stroke(d, width, alpha=alpha, amp=0.4, taper=False)
-    for det in frame['details']:
+    for det in details:
         if det[0] == 'dot':
             _, x, y, r = det
             sh.fill_poly(ellipse_points(x, y, r, r), color, alpha)
@@ -156,14 +158,31 @@ def guide(frame, alpha=170, width=3.0, fill_alpha=22, color=GUIDE_LINE):
     return sh.result()
 
 
+def person_guide(fid, body, **kw):
+    f = frames.get(fid, body)
+    return guide(f['parts'], f['details'], frames.PERSON_W, 1100 + frames.IDS.index(fid) * 3 +
+                 frames.BODIES.index(body), **kw)
+
+
+def gear_guide(fid, **kw):
+    gear = frames.get(fid)['gear']
+    return guide([p for g in gear for p in g['parts']], [d for g in gear for d in g['details']], frames.GEAR_W,
+                 1150 + frames.IDS.index(fid), **kw)
+
+
 def frame_card(frame, on):
     w, h = FRAME_CARD
     tint = {'tank': 'sky', 'melee': 'pink', 'ranged': 'peach', 'support': 'mint'}[frame['id']]
     img = note(w, h, 930 + frames.IDS.index(frame['id']) * 3 + on,
                ((w / 2, h / 2, w / 2, h / 2, PASTEL[tint], 150 if on else 60),), line=4.2 if on else 3.0, r=16)
     # 왼쪽에 작은 틀 실루엣
-    g = guide(frame, alpha=255, width=6.0, fill_alpha=80 if on else 50, color=PLUM)
-    g = g.crop(g.getbbox())
+    # 아이콘: 사람 밑그림 옆에 무기 밑그림 (종이 두 장을 붙인 모양)
+    kw = dict(alpha=255, width=6.0, fill_alpha=80 if on else 50, color=PLUM)
+    pg, gg = person_guide(frame['id'], 'medium', **kw), gear_guide(frame['id'], **kw)
+    pg, gg = pg.crop(pg.getbbox()), gg.crop(gg.getbbox())
+    g = Image.new('RGBA', (pg.width + 14 + gg.width, max(pg.height, gg.height)), (0, 0, 0, 0))
+    g.alpha_composite(pg, (0, g.height - pg.height))
+    g.alpha_composite(gg, (pg.width + 14, (g.height - gg.height) // 2))
     k = min(62 / g.width, 64 / g.height)   # 아이콘 칸 62px, 나머지는 이름 칸
     icon = g.resize((round(g.width * k), round(g.height * k)), Image.LANCZOS)
     img.alpha_composite(icon, (16 + (62 - icon.width) // 2, (h - icon.height) // 2))
@@ -175,17 +194,18 @@ def frame_card(frame, on):
 
 
 TAB = (138, 58)
+BODY_TAB = (92, 50)
 TABS = (('all', '전체', 'lemon'), ('tank', '탱커', 'sky'), ('melee', '근접 딜러', 'pink'),
         ('ranged', '원거리 딜러', 'peach'), ('support', '서포터', 'mint'))
 
 
-def tab(i, label, tint, on):
-    w, h = TAB
+def tab(i, label, tint, on, size=TAB, font_size=24):
+    w, h = size
     img = note(w, h, 1000 + i * 2 + on, ((w / 2, h / 2, w / 2, h / 2, PASTEL[tint], 170 if on else 45),),
                fill_alpha=250 if on else 170, line=3.8 if on else 2.6, r=16)
     sh = Sheet(w, h, seed=0, ss=1)
     sh.img = img
-    sh.ink_text(label, ImageFont.truetype(os.path.join(pastel.FONTS, pastel.HAND), 24), w / 2, h / 2, PLUM,
+    sh.ink_text(label, ImageFont.truetype(os.path.join(pastel.FONTS, pastel.HAND), font_size), w / 2, h / 2, PLUM,
                 alpha=255 if on else 170, anchor='mm')
     return img
 
@@ -280,16 +300,23 @@ BUTTONS = (  # 파일 이름, 글씨, 색, 크기
 
 def main():
     save(panel(), 'panel.png')
-    save(paper(), 'paper.png')
+    save(paper(frames.PERSON_W), 'paper_person.png')
+    save(paper(frames.GEAR_W), 'paper_gear.png')
     for state in ('off', 'on', 'empty'):
         save(card(state), {'off': 'card.png', 'on': 'card_on.png', 'empty': 'card_empty.png'}[state])
     for f in frames.FRAMES:
-        save(guide(f), f'guide_{f["id"]}.png')
+        for body in frames.BODIES:
+            save(person_guide(f['id'], body), f'guide_person_{f["id"]}_{body}.png')
+        save(gear_guide(f['id']), f'guide_gear_{f["id"]}.png')
         for on in (False, True):
             save(frame_card(f, on), f'frame_{f["id"]}{"_on" if on else ""}.png')
     for i, (tid, label, tint) in enumerate(TABS):
         for on in (False, True):
             save(tab(i, label, tint, on), f'tab_{tid}{"_on" if on else ""}.png')
+    for i, body in enumerate(frames.BODIES):
+        for on in (False, True):
+            save(tab(10 + i, frames.BODY_NAMES[body], 'lavender', on, BODY_TAB, 22),
+                 f'body_{body}{"_on" if on else ""}.png')
     save(field(), 'field.png')
     save(spot('ally'), 'spot.png')
     save(spot('on'), 'spot_on.png')
