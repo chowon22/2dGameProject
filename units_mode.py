@@ -10,7 +10,8 @@
     자리 밖에 놓으면 그대로 돌아간다
 - 잉크 (오른쪽 위): 색마다 '놓은 유닛에 드는 잉크 / 가진 잉크'. 가진 잉크를 넘게는 놓을 수 없다
 - 내 프리셋 (아래): 전체 / 탱커 / 근접 딜러 / 원거리 딜러 / 서포터 칸으로 나눠 본다. 지금 놓을 수 없는 카드는 흐리게.
-  같은 프리셋을 여러 번 놓을 수 있다. 많으면 마우스 휠로 넘긴다. 카드의 × 를 두 번 누르면 프리셋을 지운다
+  같은 프리셋을 여러 번 놓을 수 있다. 많으면 마우스 휠로 넘긴다. 카드에 마우스를 올리면 드는 잉크가 뜨고,
+  × 를 두 번 누르면 프리셋을 지운다
 - 다 빼기 / 닫기, ESC 닫기
 """
 from pico2d import (clear_canvas, update_canvas, get_events, SDL_QUIT, SDL_KEYDOWN, SDL_MOUSEMOTION,
@@ -444,6 +445,8 @@ def draw():
     draw_presets()
     for b in buttons:
         b.draw()
+    if not dragging:
+        unit_cards.draw_tip(deleter.hover, visible())   # 마우스를 올린 카드: 드는 잉크
     draw_dragged()
     draw_toast()
     if t < FADE_IN:
