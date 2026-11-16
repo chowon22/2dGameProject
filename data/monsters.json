@@ -1,6 +1,6 @@
 {
-  "carrier_red": {"name": "빨강 운반자", "image": ["cutscene", "carrier_red.png"], "element": "fire", "hp": 110, "atk": 14, "drop": {"red": 20, "black": 40}},
-  "carrier_green": {"name": "초록 운반자", "image": ["cutscene", "carrier_green.png"], "element": "grass", "hp": 125, "atk": 12, "drop": {"green": 20, "black": 40}},
-  "carrier_blue": {"name": "파랑 운반자", "image": ["cutscene", "carrier_blue.png"], "element": "water", "hp": 100, "atk": 16, "drop": {"blue": 20, "black": 40}},
-  "carrier_big": {"name": "커다란 운반자", "image": ["cutscene", "carrier_red.png"], "scale": 1.5, "element": "fire", "hp": 420, "atk": 24, "drop": {"red": 60, "black": 120}}
+  "carrier_red": {"name": "빨강 운반자", "image": ["cutscene", "carrier_red.png"], "element": "fire", "hp": 40, "atk": 6, "drop": {"red": 20, "black": 40}},
+  "carrier_green": {"name": "초록 운반자", "image": ["cutscene", "carrier_green.png"], "element": "grass", "hp": 46, "atk": 5, "drop": {"green": 20, "black": 40}},
+  "carrier_blue": {"name": "파랑 운반자", "image": ["cutscene", "carrier_blue.png"], "element": "water", "hp": 36, "atk": 7, "drop": {"blue": 20, "black": 40}},
+  "carrier_big": {"name": "커다란 운반자", "image": ["cutscene", "carrier_red.png"], "scale": 1.5, "element": "fire", "hp": 180, "atk": 11, "drop": {"red": 60, "black": 120}}
 }
