@@ -1,15 +1,15 @@
 """유닛 그리기 화면. 준비 화면의 '유닛 추가하기' 를 누르면 그 위에 뜬다 (push_mode).
 
 위에서부터
-- 내 프리셋: 그려서 저장한 유닛. 누르면 그 그림과 틀이 종이에 올라와 이어 그리거나 고칠 수 있다
-- 틀: 탱커(방패 기사) / 근접 딜러(검사) / 원거리 딜러(궁수) / 서포터(마법사). 고르면 종이에 연필 점선 밑그림이 깔린다
-- 잉크: 검정·빨강·초록·파랑 잉크병 + 지우개. 병 옆 숫자는 가진 잉크 (그려도 줄지 않는다)
-- 종이: 들어오자마자 바로 그릴 수 있다. 종이 위 커서 자리에는 지금 붓 색·굵기의 점이 보인다. 가진 잉크와 상관없이 어떤 색이든 마음껏 칠한다
-  (잉크는 내 유닛에서 고를 때 따진다)
-프리셋 카드에 마우스를 올리면 × 가 뜨고, 두 번 누르면 그 프리셋을 지운다
-오른쪽: 저장하기(프리셋에 더하고 이 유닛에 드는 잉크를 적어 둔다 — 가진 잉크는 그대로) / 다 지우기 / 닫기
+- 내 프리셋: 그려서 저장한 유닛. 누르면 그 그림·틀·체형이 종이에 올라와 이어 그리거나 고칠 수 있다.
+  카드에 마우스를 올리면 드는 잉크가 뜨고, × 를 두 번 누르면 그 프리셋을 지운다
+- 틀: 탱커(방패 기사) / 근접 딜러(검사) / 원거리 딜러(궁수) / 서포터(마법사)
+- 잉크: 검정·빨강·초록·파랑 잉크병 + 지우개 (병 옆 숫자는 가진 잉크, 그려도 줄지 않는다) · 체형: 작은 / 보통 / 큰
+- 종이 두 장: 왼쪽 사람 종이(체형별 밑그림), 오른쪽 무기 종이(무기 밑그림 — 원딜은 활과 화살이 따로).
+  들어오자마자 바로 그릴 수 있고, 붓질은 시작한 종이 안에서만 칠해진다. 커서 자리에 지금 붓 색·굵기의 점이 보인다.
+  가진 잉크와 상관없이 어떤 색이든 마음껏 칠한다 (잉크는 내 유닛에서 놓을 때 따진다)
+오른쪽: 되돌리기 / 다 지우기 / 저장하기(프리셋에 더하고 드는 잉크를 적어 둔다) / 닫기
 
-되돌리기: 붓질·다 지우기·불러오기를 하나씩 되돌린다 (Ctrl+Z)
 키: 1~4 잉크, E 지우개, Ctrl+Z 되돌리기, ESC 닫기
 """
 import numpy as np
@@ -32,6 +32,7 @@ from ui_button import Button
 
 W, H = 1280, 720
 INK = prepare_mode.INK
+SOFT = (130, 110, 150)
 TOAST_TIME = 1.8
 FADE_IN = 0.18
 
@@ -41,26 +42,57 @@ ROW_X = 220                     # 줄 내용이 시작하는 x
 PRESET_GAP, MAX_PRESETS = 124, 8
 FRAME_GAP = 216
 INK_GAP = 120
-# 종이: 가운데 (PAPER_X, PAPER_Y), 실제로 칠하는 곳은 frames.PAPER_W x PAPER_H
-PAPER_X, PAPER_Y = 470, 222   # 왼쪽 끝을 위 줄들(ROW_X)에 맞춤
-PAPER_L = PAPER_X - frames.PAPER_W // 2
-PAPER_T = PAPER_Y + frames.PAPER_H // 2     # 종이 윗변 (pico y)
-SIDE_X = 975                    # 오른쪽 칸 가운데
-SIDE_L, SIDE_R = 870, 1080     # 오른쪽 버튼 두 줄
+BODY_X, BODY_GAP = 880, 100     # 체형 칸
+# 종이 두 장: 왼쪽 끝 x 와 윗변 y (pico). 실제로 칠하는 곳은 PERSON_W / GEAR_W x PAPER_H
+PAPER_Y = 222                   # 종이 가운데 y
+PAPER_T = PAPER_Y + frames.PAPER_H // 2
+PERSON_L, GEAR_L = ROW_X, ROW_X + frames.PERSON_W + 52
+SIDE_X = 1000                   # 오른쪽 칸 가운데
+SIDE_L, SIDE_R = 895, 1105      # 오른쪽 버튼 두 줄
 TOOLS = painter.COLORS + (painter.ERASER,)
+NAMES = {'black': '검정', 'red': '빨강', 'green': '초록', 'blue': '파랑'}
 
-panel = paper_img = ink_wave = eraser_img = fade = toast_img = None
+
+class Sheet:
+    """종이 한 장: 칠한 내용(Paper) + 화면에 올린 텍스처 + 자리."""
+
+    def __init__(self, kind, left, w):
+        self.kind, self.left, self.w = kind, left, w
+        self.paper = painter.Paper(w, frames.PAPER_H)
+        self.tex = LiveImage(w, frames.PAPER_H)
+        self.paper.dirty = (0, 0, w, frames.PAPER_H)
+        self.cx = left + w / 2
+
+    def local(self, mx, my, clamp=False):
+        """화면 좌표 → 이 종이 좌표 (왼쪽 위 0,0). 밖이면 None (clamp 면 가장자리 너머로 조금까지)."""
+        px, py = mx - self.left, PAPER_T - my
+        if clamp:
+            return min(max(px, -1), self.w), min(max(py, -1), frames.PAPER_H)
+        if 0 <= px < self.w and 0 <= py < frames.PAPER_H:
+            return px, py
+        return None
+
+    def sync(self):
+        if self.paper.dirty:
+            x0, y0, x1, y1 = self.paper.dirty
+            self.tex.upload(self.paper.rgba(self.paper.dirty), x0, y0)
+            self.paper.dirty = None
+
+
+panel = ink_wave = eraser_img = fade = toast_img = None
+paper_imgs = {}
 frame_imgs = {}
+body_imgs = {}
 ink_icons = {}
-guides = {}
 brush_tips = {}         # 도구 → 커서 자리에 보일 붓 점
 buttons = []
-paper = None
-paper_tex = None
+sheets = []             # [사람 종이, 무기 종이]
+edits = []              # 되돌리기 순서: 바꾼 종이 번호들 (한 번에 둘 다 바뀌면 (0, 1))
 frame_id = frames.IDS[0]
+body = 'medium'
 tool = 'black'
 picked = None           # 지금 종이에 올린 프리셋 id
-painting = False
+painting = None         # 붓질 중인 종이 번호
 deleter = None
 toast = None
 t = 0.0
@@ -79,11 +111,14 @@ def ink_x(i):
     return ROW_X + 30 + INK_GAP * i
 
 
-def to_paper(mx, my):
-    """화면 좌표 → 종이 좌표 (왼쪽 위 0,0). 종이 밖이면 None."""
-    px, py = mx - PAPER_L, PAPER_T - my
-    if 0 <= px < frames.PAPER_W and 0 <= py < frames.PAPER_H:
-        return px, py
+def body_x(i):
+    return BODY_X + BODY_GAP * i
+
+
+def sheet_at(mx, my):
+    for i, s in enumerate(sheets):
+        if s.local(mx, my):
+            return i
     return None
 
 
@@ -104,9 +139,24 @@ def owned():
     return save_data.current['ink'] if save_data.current else {c: 0 for c in painter.COLORS}
 
 
+def ink_used():
+    a, b = (s.paper.ink_used() for s in sheets)
+    return {c: a[c] + b[c] for c in painter.COLORS}
+
+
+def counts():
+    a, b = (s.paper.counts_dict() for s in sheets)
+    return {c: a[c] + b[c] for c in painter.COLORS}
+
+
 def say(msg):
     global toast
     toast = (msg, TOAST_TIME)
+
+
+def record(*which):
+    edits.append(which)
+    del edits[:-painter.MAX_UNDO * 2]
 
 
 # ---------------------------------------------------------------- 행동
@@ -120,43 +170,66 @@ def pick_frame(fid):
     frame_id = fid
 
 
+def pick_body(name):
+    global body
+    body = name
+
+
 def pick_preset(unit):
-    global picked, frame_id
-    path = save_data.unit_path(save_data.current['slot'], unit['id'])
-    try:
-        paper.load_png(path)
-    except OSError:
+    global picked, frame_id, body
+    slot = save_data.current['slot']
+    paths = (save_data.unit_path(slot, unit['id']), save_data.gear_path(slot, unit['id']))
+    if not any(map(_exists, paths)):
         say('그림 파일을 찾을 수 없어요')
         return
+    for s, path in zip(sheets, paths):
+        if _exists(path):
+            s.paper.load_png(path)
+        else:   # 무기 그림이 없는 예전 유닛
+            s.paper.clear()
+    record(0, 1)
     picked = unit['id']
     if unit.get('frame') in frames.IDS:
         frame_id = unit['frame']
+    body = unit.get('body', 'medium') if unit.get('body') in frames.BODIES else 'medium'
+
+
+def _exists(path):
+    import os
+    return os.path.exists(path)
 
 
 def save_unit():
     global picked
     if not save_data.current:
         return
-    if paper.is_empty():
+    if all(s.paper.is_empty() for s in sheets):
         say('아직 아무것도 그리지 않았어요')
         return
-    used = paper.ink_used()
-    unit = save_data.add_unit(save_data.current, frame_id, paper.counts_dict(), used)
-    paper.save_png(save_data.unit_path(save_data.current['slot'], unit['id']))
+    unit = save_data.add_unit(save_data.current, frame_id, counts(), ink_used(), body=body)
+    slot = save_data.current['slot']
+    sheets[0].paper.save_png(save_data.unit_path(slot, unit['id']))
+    sheets[1].paper.save_png(save_data.gear_path(slot, unit['id']))
     save_data.save_current()
-    paper.clear()
-    picked = None
-    say(f'{frames.get(frame_id)["name"]} 유닛을 프리셋에 저장했어요!')
+    clear_paper()
+    say(f'{frames.BODY_NAMES[body]} {frames.get(frame_id)["name"]} 유닛을 프리셋에 저장했어요!')
 
 
 def undo():
-    if not paper.undo():
-        say('되돌릴 게 없어요')
+    while edits:
+        which = edits.pop()
+        if any([sheets[i].paper.undo() for i in which]):
+            return
+    say('되돌릴 게 없어요')
 
 
 def clear_paper():
     global picked
-    paper.clear()
+    changed = [i for i, s in enumerate(sheets) if not s.paper.is_empty()]
+    for i in changed:
+        sheets[i].paper.clear()
+    if changed:
+        record(*changed)
     picked = None
 
 
@@ -166,33 +239,31 @@ def close():
 
 # ---------------------------------------------------------------- 모드
 def init():
-    global panel, paper_img, ink_wave, eraser_img, fade, toast_img, frame_imgs, ink_icons
-    global guides, brush_tips, buttons, paper, paper_tex, tool, picked, painting, deleter, toast, t
+    global panel, ink_wave, eraser_img, fade, toast_img, paper_imgs, frame_imgs, body_imgs, ink_icons
+    global brush_tips, buttons, sheets, edits, tool, picked, painting, deleter, toast, t
     panel = image('draw', 'panel.png')
-    paper_img = image('draw', 'paper.png')
     ink_wave = image('draw', 'ink_wave.png')
     eraser_img = image('draw', 'eraser.png')
     fade = image('common', 'fade.png')
     toast_img = image('prepare', 'toast.png')
+    paper_imgs = {k: image('draw', f'paper_{k}.png') for k in ('person', 'gear')}
     frame_imgs = {(f, on): image('draw', f'frame_{f}{"_on" if on else ""}.png')
                   for f in frames.IDS for on in (False, True)}
+    body_imgs = {(b, on): image('draw', f'body_{b}{"_on" if on else ""}.png')
+                 for b in frames.BODIES for on in (False, True)}
     ink_icons = {c: image('prepare', f'ink_{c}.png') for c in painter.COLORS}
-    guides = {f: image('draw', f'guide_{f}.png') for f in frames.IDS}
     if not brush_tips:
         brush_tips = {name: LiveImage(*tip.shape[1::-1], tip) for name, tip in
                       ((name, make_brush_tip(name)) for name in TOOLS)}
-    paper = painter.Paper(frames.PAPER_W, frames.PAPER_H)
-    if paper_tex is None:
-        paper_tex = LiveImage(frames.PAPER_W, frames.PAPER_H)
-    paper.dirty = (0, 0, paper.w, paper.h)
+    sheets = [Sheet('person', PERSON_L, frames.PERSON_W), Sheet('gear', GEAR_L, frames.GEAR_W)]
+    edits = []
     # 오른쪽 두 칸: 위 줄 되돌리기·다 지우기, 아래 줄 저장하기·닫기
     buttons = [Button(x, y, f'button_{name}.png', f'button_{name}_hover.png', action, 0.3 * i, 'draw')
                for i, (name, x, y, action) in enumerate((
-                   ('undo', SIDE_L, 300, undo), ('clear', SIDE_R, 300, clear_paper),
-                   ('save', SIDE_L, 190, save_unit), ('close', SIDE_R, 190, close)))]
+                   ('undo', SIDE_L, 270, undo), ('clear', SIDE_R, 270, clear_paper),
+                   ('save', SIDE_L, 165, save_unit), ('close', SIDE_R, 165, close)))]
     tool = 'black'
-    picked = None
-    painting = False
+    picked = painting = None
     deleter = unit_cards.Deleter()
     toast = None
     t = 0.0
@@ -213,7 +284,7 @@ def resume():
 
 def move_mouse(pos):
     """종이 위에서는 붓자국 효과를 끈다 (그린 선과 헷갈리지 않게)."""
-    if to_paper(*pos):
+    if sheet_at(*pos) is not None or painting is not None:
         title_mode.mouse = pos
         title_mode.trail.last = None
     else:
@@ -245,10 +316,15 @@ def click(mx, my):
         if hit(ink_x(i), INK_Y, 70, 60, mx, my):
             pick_tool(name)
             return
-    p = to_paper(mx, my)
-    if p:
-        painting = True
-        paper.begin(*p, tool)
+    for i, b in enumerate(frames.BODIES):
+        if hit(body_x(i), INK_Y, 84, 42, mx, my):
+            pick_body(b)
+            return
+    i = sheet_at(mx, my)
+    if i is not None:
+        painting = i
+        sheets[i].paper.begin(*sheets[i].local(mx, my), tool)
+        record(i)
 
 
 def handle_events():
@@ -264,7 +340,7 @@ def handle_events():
                 pick_tool(painter.COLORS[event.key - SDLK_1])
             elif event.key == SDLK_e:
                 pick_tool(painter.ERASER)
-            elif event.key == SDLK_z and SDL_GetModState() & KMOD_CTRL and not painting:
+            elif event.key == SDLK_z and SDL_GetModState() & KMOD_CTRL and painting is None:
                 undo()
         elif event.type == SDL_MOUSEMOTION:
             mx, my = title_mode.to_canvas(event)
@@ -272,18 +348,16 @@ def handle_events():
             deleter.move(preset_cards(), mx, my)
             for b in buttons:
                 b.mouse_move(mx, my)
-            if painting:
-                # 종이 밖으로 나가도 가장자리까지는 이어 칠한다
-                px = min(max(mx - PAPER_L, -1), frames.PAPER_W)
-                py = min(max(PAPER_T - my, -1), frames.PAPER_H)
-                paper.drag(px, py, tool)
+            if painting is not None:
+                # 종이 밖으로 나가도 그 종이 가장자리까지는 이어 칠한다 (다른 종이로 넘어가지 않는다)
+                sheets[painting].paper.drag(*sheets[painting].local(mx, my, clamp=True), tool)
         elif event.type == SDL_MOUSEBUTTONDOWN and event.button == SDL_BUTTON_LEFT:
             if t > FADE_IN:
                 click(*title_mode.to_canvas(event))
         elif event.type == SDL_MOUSEBUTTONUP and event.button == SDL_BUTTON_LEFT:
-            if painting:
-                paper.end()
-                painting = False
+            if painting is not None:
+                sheets[painting].paper.end()
+                painting = None
 
 
 def update():
@@ -295,10 +369,8 @@ def update():
     title_mode.trail.update()
     if toast:
         toast = (toast[0], toast[1] - dt) if toast[1] > dt else None
-    if paper.dirty:
-        x0, y0, x1, y1 = paper.dirty
-        paper_tex.upload(paper.rgba(paper.dirty), x0, y0)
-        paper.dirty = None
+    for s in sheets:
+        s.sync()
 
 
 # ---------------------------------------------------------------- 그리기
@@ -325,15 +397,16 @@ def draw_inks():
     for i, name in enumerate(TOOLS):
         x = ink_x(i)
         if name == tool:
-            ink_wave.draw(x + 2, INK_Y - 32)   # 고른 병 바로 아래 구불구불한 밑줄
+            ink_wave.draw(x + 2, INK_Y - 32)   # 고른 병 바로 아래 펜 밑줄
         bob = 3 if name == tool else 0
         if name == painter.ERASER:
             eraser_img.draw(x, INK_Y + bob, 48, 48)
             continue
         ink_icons[name].draw(x, INK_Y + bob, 42, 48)
         text.draw(str(have.get(name, 0)), x + 26, INK_Y - 2, 28, INK)
-    f = frames.get(frame_id)
-    text.draw(f'{f["name"]}:  검정 → {f["stat"]} ↑  ·  색 → 원소', ink_x(len(TOOLS)) - 10, INK_Y, 22, (130, 110, 150))
+    text.draw('체형', BODY_X - 96, INK_Y, 26, INK)
+    for i, b in enumerate(frames.BODIES):
+        body_imgs[(b, b == body)].draw(body_x(i), INK_Y)
 
 
 def make_brush_tip(name):
@@ -362,25 +435,30 @@ def make_brush_tip(name):
 
 def draw_brush_tip():
     mx, my = title_mode.mouse
-    if to_paper(mx, my):
+    if sheet_at(mx, my) is not None:
         brush_tips[tool].draw(round(mx), round(my))
 
 
-def draw_paper():
-    paper_img.draw(PAPER_X, PAPER_Y)
-    guides[frame_id].draw(PAPER_X, PAPER_Y)
-    paper_tex.draw(PAPER_X, PAPER_Y)
+def draw_papers():
+    guides = {'person': image('draw', f'guide_person_{frame_id}_{body}.png'),
+              'gear': image('draw', f'guide_gear_{frame_id}.png')}
+    for s in sheets:
+        paper_imgs[s.kind].draw(s.cx, PAPER_Y)
+        guides[s.kind].draw(s.cx, PAPER_Y)
+        s.tex.draw(s.cx, PAPER_Y)
+        text.draw('사람' if s.kind == 'person' else '무기', s.left + 10, PAPER_T - 16, 20, (170, 154, 186))
 
 
 def draw_side():
     for b in buttons:
         b.draw()
-    used = paper.ink_used()
-    names = {'black': '검정', 'red': '빨강', 'green': '초록', 'blue': '파랑'}
-    lines = [f'{names[c]} {used[c]}' for c in painter.COLORS if used[c]]
-    text.draw('이 그림에 드는 잉크', SIDE_X, 412, 24, INK, 'c')
-    text.draw('  ·  '.join(lines) if lines else '아직 없음', SIDE_X, 380, 24, (130, 110, 150), 'c')
-    text.draw('Ctrl+Z 로도 되돌려요', SIDE_X, 110, 20, (150, 128, 170), 'c')
+    used = ink_used()
+    lines = [f'{NAMES[c]} {used[c]}' for c in painter.COLORS if used[c]]
+    f = frames.get(frame_id, body)
+    text.draw(f'{frames.BODY_NAMES[body]} {f["name"]}  ·  검정 → {f["stat"]} ↑  ·  색 → 원소', SIDE_X, 420, 20, SOFT, 'c')
+    text.draw('이 그림에 드는 잉크', SIDE_X, 384, 24, INK, 'c')
+    text.draw('  ·  '.join(lines) if lines else '아직 없음', SIDE_X, 354, 24, SOFT, 'c')
+    text.draw('Ctrl+Z 로도 되돌려요', SIDE_X, 92, 20, (150, 128, 170), 'c')
 
 
 def draw_toast():
@@ -388,10 +466,11 @@ def draw_toast():
         return
     msg, left = toast
     a = min(1.0, left / 0.4, (TOAST_TIME - left) / 0.15)
+    x = (PERSON_L + GEAR_L + frames.GEAR_W) / 2
     toast_img.opacify(a)
-    toast_img.draw(PAPER_X, PAPER_Y)
+    toast_img.draw(x, PAPER_Y)
     toast_img.opacify(1)
-    text.draw(msg, PAPER_X, PAPER_Y + 2, 28, INK, 'c', alpha=a)
+    text.draw(msg, x, PAPER_Y + 2, 28, INK, 'c', alpha=a)
 
 
 def draw():
@@ -401,8 +480,9 @@ def draw():
     draw_presets()
     draw_frames()
     draw_inks()
-    draw_paper()
+    draw_papers()
     draw_side()
+    unit_cards.draw_tip(deleter.hover, preset_cards())   # 마우스를 올린 카드: 드는 잉크
     draw_toast()
     if t < FADE_IN:
         fade.opacify(0.5 * (1 - t / FADE_IN))
