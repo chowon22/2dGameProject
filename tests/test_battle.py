@@ -19,18 +19,22 @@ def unit(frame, black=0, red=0, green=0, blue=0, body='medium', ink=None):
 
 class StatsTest(unittest.TestCase):
     def test_black_ink_is_percent(self):
-        for role, (hp, atk, buff) in stats.BASE.items():
-            base = stats.unit_stats(unit(role, ink=0))
-            self.assertEqual((base['hp'], base['atk'], base['buff']), (hp, atk, buff))
-            plus = stats.unit_stats(unit(role, ink=100))          # 검정 100 = +100% = 2배
-            self.assertEqual(plus['hp'], hp * 2)
-            self.assertAlmostEqual(plus['atk'], atk * 2)
-            self.assertAlmostEqual(plus['buff'], buff * 2)
-            one = stats.unit_stats(unit(role, ink=1))             # 검정 1 = +1%
-            self.assertAlmostEqual(one['atk'], round(atk * 1.01, 1))
-            self.assertGreater(plus['power'], base['power'])
-        self.assertGreater(stats.BASE['tank'][0], stats.BASE['melee'][0])     # 역할마다 기본이 다르다
-        self.assertGreater(stats.BASE['melee'][1], stats.BASE['tank'][1])
+        for role, (hp, atk, buff) in stats.STANDARD.items():
+            full = stats.unit_stats(unit(role, ink=100))          # 검정 100 = 100%
+            self.assertEqual((full['hp'], full['atk'], full['buff']), (hp, atk, buff))
+            half = stats.unit_stats(unit(role, ink=50))           # 50 = 50%
+            self.assertEqual(half['hp'], round(hp / 2))
+            self.assertAlmostEqual(half['atk'], round(atk / 2, 1))
+            double = stats.unit_stats(unit(role, ink=200))        # 200 = 200%
+            self.assertEqual(double['hp'], hp * 2)
+            one = stats.unit_stats(unit(role, ink=1))             # 1 = 1%
+            self.assertEqual(one['hp'], max(1, round(hp / 100)))
+            self.assertAlmostEqual(one['atk'], round(atk / 100, 1))
+            self.assertLess(one['power'], half['power'])
+            self.assertLess(half['power'], full['power'])
+        self.assertEqual(stats.unit_stats(unit('tank', ink=0))['hp'], 1)    # 체력은 적어도 1
+        self.assertGreater(stats.STANDARD['tank'][0], stats.STANDARD['melee'][0])   # 역할마다 다르다
+        self.assertGreater(stats.STANDARD['melee'][1], stats.STANDARD['tank'][1])
 
     def test_color_makes_element(self):
         self.assertIsNone(stats.unit_stats(unit('melee', 3000))['element'])           # 검정뿐: 원소 없음
@@ -48,7 +52,7 @@ class StatsTest(unittest.TestCase):
         self.assertLess(stats.element_mul(weak, grass), stats.element_mul(fire, grass))   # 많이 칠할수록 세게
 
     def test_body_type(self):
-        small, large = stats.unit_stats(unit('tank', 3000, body='small')), stats.unit_stats(unit('tank', 3000, body='large'))
+        small, large = stats.unit_stats(unit('tank', ink=150, body='small')), stats.unit_stats(unit('tank', ink=150, body='large'))
         self.assertGreater(large['hp'], small['hp'])
         self.assertGreater(small['atk'], large['atk'])
 

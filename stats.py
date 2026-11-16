@@ -1,6 +1,7 @@
 """그린 유닛·몬스터의 능력치와 원소 (PRD 4.2, 5장). pico2d 와 무관한 순수 로직 (tests/test_battle.py).
 
-- 검정 잉크 1 = 체력·공격력(·버프량) +1% (예: 검정 150 을 썼으면 기본의 2.5배). 역할마다 기본 능력치가 다르다
+- 검정 잉크 1 = 능력치 1%: 체력·공격력·버프량 = 역할의 100% 능력치 x (검정 잉크 / 100).
+  검정 1 이면 1%, 100 이면 100%(STANDARD 그대로), 200 이면 200%. 역할마다 100% 능력치가 다르다
   (탱커는 체력, 근딜·원딜은 공격력, 서포터는 버프량이 높다)
 - 색을 칠하면 원소가 생긴다: 가장 많이 칠한 색 (빨강 불, 초록 풀, 파랑 물). 많이 칠할수록 상성이 세게 먹힌다
 - 체형: 작은 체형은 날렵하게(공격 조금 ↑, 체력 ↓), 큰 체형은 튼튼하게(체력 ↑, 공격 조금 ↓)
@@ -11,10 +12,11 @@ ELEMENT_OF = {'red': 'fire', 'green': 'grass', 'blue': 'water'}
 ELEMENT_NAMES = {'fire': '불', 'grass': '풀', 'water': '물', None: '없음'}
 BEATS = {'fire': 'grass', 'grass': 'water', 'water': 'fire'}   # 불 > 풀 > 물 > 불
 
-BASE = {   # 역할마다 기본 (체력, 공격력, 버프량) — 검정 잉크 % 만큼 커진다
-    'tank': (40, 4, 0), 'melee': (24, 8, 0), 'ranged': (20, 7, 0), 'support': (22, 3, 4),
+STANDARD = {   # 역할마다 100% 능력치 (체력, 공격력, 버프량) = 검정 잉크 100 을 썼을 때
+    'tank': (80, 8, 0), 'melee': (48, 16, 0), 'ranged': (40, 14, 0), 'support': (44, 6, 8),
 }
-BLACK_PERCENT = 1.0           # 검정 잉크 1 마다 능력치 +1%
+BASE = STANDARD               # (예전 이름)
+INK_PER_PERCENT = 1           # 검정 잉크 이만큼 = 능력치 1%
 BODY_MUL = {'small': (0.85, 1.1), 'medium': (1.0, 1.0), 'large': (1.2, 0.92)}   # (체력, 공격력)
 ELEMENT_MIN_SHARE = 0.08      # 색이 칠한 픽셀의 이만큼은 넘어야 원소가 생긴다
 ELEMENT_FULL = 2000           # 색을 이만큼 칠하면 상성 세기 최대
@@ -29,8 +31,8 @@ def unit_stats(unit):
     role = unit.get('frame') if unit.get('frame') in BASE else 'melee'
     counts = unit.get('counts', {})
     black = counts.get('black', 0)
-    grow = 1 + unit.get('ink', {}).get('black', 0) * BLACK_PERCENT / 100   # 검정 잉크 1 = +1%
-    hp, atk, buff = (v * grow for v in BASE[role])
+    percent = unit.get('ink', {}).get('black', 0) / INK_PER_PERCENT        # 검정 잉크 1 = 1%
+    hp, atk, buff = (v * percent / 100 for v in STANDARD[role])
     mh, ma = BODY_MUL.get(unit.get('body', 'medium'), (1.0, 1.0))
     hp, atk = hp * mh, atk * ma
     colors = {c: counts.get(c, 0) for c in ELEMENT_OF}
@@ -40,7 +42,7 @@ def unit_stats(unit):
     if total and colors[best] >= total * ELEMENT_MIN_SHARE:
         element = ELEMENT_OF[best]
         strength = min(1.0, colors[best] / ELEMENT_FULL)
-    hp, atk, buff = round(hp), round(atk, 1), round(buff, 1)
+    hp, atk, buff = max(1, round(hp)), round(atk, 1), round(buff, 1)   # 체력은 적어도 1
     return {'role': role, 'hp': hp, 'atk': atk, 'buff': buff, 'element': element, 'strength': strength,
             'power': power(hp, atk, buff)}
 
