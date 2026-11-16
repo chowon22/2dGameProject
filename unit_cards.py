@@ -15,7 +15,7 @@ from live_image import LiveImage
 
 INK = (86, 68, 106)
 CARD_W, CARD_H = 112, 92
-THUMB_W, THUMB_H = 64, 48       # 카드 안 그림 칸 (왼쪽 잉크 칸 옆)
+THUMB_W, THUMB_H = 58, 38       # 카드 안 그림 칸 (왼쪽 잉크 칸 옆, 아래 이름 칸 위)
 DEL_DX, DEL_DY, DEL_R = 48, 38, 16   # 지우기 × 자리 (카드 가운데에서), 누르는 반지름
 
 _thumbs = {}                    # (슬롯, 유닛 id) → 썸네일 (없으면 None)
@@ -78,13 +78,13 @@ def draw(unit, x, y, on=False, alpha=1.0, delete=None):
     _draw(image('draw', 'card_on.png' if on else 'card.png'), x, y, alpha)
     img = thumb(unit)
     if img:
-        _draw(img, x + 12, y + 8, alpha)
+        _draw(img, x + 13, y + 11, alpha)
     name = frames.get(unit['frame'])['name'] if unit.get('frame') in frames.IDS else ''
-    text.draw(name, x, y - 27, 17, INK, 'c', alpha=alpha)
+    text.draw(name, x, y - 21, 15, INK, 'c', alpha=alpha)   # 쪽지 테두리(가운데에서 34px) 안쪽
     ink = unit.get('ink') or {'black': 0}
     main = max(ink, key=ink.get)   # 가장 많이 드는 색의 잉크병
-    _draw(image('prepare', f'ink_{main}.png'), x - 34, y + 22, alpha, 16, 18)
-    text.draw(str(cost(unit)), x - 34, y + 2, 16, INK, 'c', alpha=alpha)
+    _draw(image('prepare', f'ink_{main}.png'), x - 31, y + 19, alpha, 14, 16)
+    text.draw(str(cost(unit)), x - 31, y + 2, 15, INK, 'c', alpha=alpha)
     if delete:
         image('draw', 'card_del_confirm.png' if delete == 'confirm' else 'card_del.png').draw(x + DEL_DX, y + DEL_DY)
 
