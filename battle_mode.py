@@ -4,13 +4,13 @@
 - 내 차례: 앞줄부터 아군이 하나씩 (발밑이 노랗게) — 적을 누르면 달려가 휘둘러 색을 흡수(피해).
   서포터는 아군을 누르면 치료 + 다음 공격 힘 보태기, 적을 누르면 약하게 공격. 넘기기로 건너뛸 수 있다
 - 적 차례: 적이 하나씩 아군을 공격 (탱커가 공격을 끌어온다)
-- 체력바 대신 그림이 흐려진다 (PRD 1.4: 그림이 곧 체력): 맞으면 바로 반투명, 체력이 줄수록 더 흐리게. 발밑에 남은 체력 숫자
+- 체력바 대신 그림이 흐려진다 (PRD 1.4: 그림이 곧 체력): 맞으면 바로 반투명, 체력이 줄수록 더 흐리게. 발밑에 네모 체력바
 - 끝: 승리면 되찾은 잉크를 받고 다음 스테이지가 열린다. 돌아가기 → 스테이지 고르기
 - 도망가기: 아무것도 받지 않고 스테이지 고르기로
 """
 import math
 
-from pico2d import (clear_canvas, update_canvas, get_events, SDL_QUIT, SDL_KEYDOWN, SDL_MOUSEMOTION,
+from pico2d import (clear_canvas, update_canvas, draw_rectangle, get_events, SDL_QUIT, SDL_KEYDOWN, SDL_MOUSEMOTION,
                     SDL_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT, SDLK_ESCAPE)
 
 import battle
@@ -40,6 +40,9 @@ LUNGE = 0.42                               # 상대 쪽으로 다가가는 정�
 FADE_IN = 0.3
 HURT_MIN = stats.HURT_MIN                  # 쓰러질 때 여기서부터 사라진다
 HIT_FLASH = 0.3                            # 맞는 순간 흔들리며 흐려지는 시간
+HP_BAR_W, HP_BAR_H = 84, 12                # 발밑 체력바 크기
+HP_BACK = (236, 228, 240)                  # 체력바 빈 칸
+HP_HIGH, HP_MID, HP_LOW = (96, 186, 104), (226, 184, 64), (214, 82, 72)
 
 stage_id = None
 battle_state = None                        # battle.Battle
@@ -310,6 +313,25 @@ def opacity(v):
     return a
 
 
+def hp_bar_color(frac):
+    """남은 체력 비율 → 바 색 (넉넉하면 초록, 절반 아래 노랑, 얼마 안 남으면 빨강)."""
+    if frac > 0.5:
+        return HP_HIGH
+    return HP_MID if frac > 0.25 else HP_LOW
+
+
+def draw_hp_bar(cx, cy, frac):
+    """(cx, cy) 를 가운데로 하는 네모 체력바. 테두리 안을 남은 체력만큼 채운다."""
+    frac = max(0.0, min(1.0, frac))
+    x1, x2 = cx - HP_BAR_W / 2, cx + HP_BAR_W / 2
+    y1, y2 = cy - HP_BAR_H / 2, cy + HP_BAR_H / 2
+    draw_rectangle(x1, y1, x2, y2, *HP_BACK, filled=True)
+    if frac > 0:
+        fill_x2 = x1 + 2 + (HP_BAR_W - 4) * frac
+        draw_rectangle(x1 + 2, y1 + 2, fill_x2, y2 - 2, *hp_bar_color(frac), filled=True)
+    draw_rectangle(x1, y1, x2, y2, *INK, filled=False)
+
+
 def draw_fighter(v):
     f = v['f']
     a = opacity(v)
@@ -335,8 +357,10 @@ def draw_fighter(v):
                            img.w * k, img.h * k)
         img.opacify(1)
     if f.alive:
+        draw_hp_bar(x, y - 18, f.hp / f.max_hp)
         elem = stats.ELEMENT_NAMES.get(f.element) if f.element else ''
-        text.draw(f'{f.hp}/{f.max_hp}' + (f'  {elem}' if elem else ''), x, y - 18, 18, INK, 'c')
+        if elem:
+            text.draw(elem, x + HP_BAR_W / 2 + 8, y - 18, 18, INK, 'l')
     if f is actor:
         text.draw('▼', x, y + 128 + 4 * math.sin(t * 5), 24, (214, 160, 52), 'c')
 
