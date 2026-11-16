@@ -123,20 +123,6 @@ class UnitSaveTest(unittest.TestCase):
         self.assertTrue(os.path.isdir(save_data.units_dir(1, self.dir)))
         self.assertEqual(save_data.add_unit(data, 'melee', {}, {}, self.dir)['id'], 2)
 
-    def test_party_stays_within_ink(self):
-        data = save_data.new_game(1, self.dir, now=0.0)          # 검정 START_INK
-        big = save_data.add_unit(data, 'tank', {}, {'black': 200}, self.dir)
-        small = save_data.add_unit(data, 'melee', {}, {'black': 60}, self.dir)
-        red = save_data.add_unit(data, 'ranged', {}, {'red': 5}, self.dir)
-        self.assertTrue(save_data.add_to_party(data, big['id']))
-        self.assertFalse(save_data.add_to_party(data, big['id']))     # 400 > 300
-        self.assertTrue(save_data.add_to_party(data, small['id']))
-        self.assertFalse(save_data.add_to_party(data, red['id']))     # 빨강은 없다
-        self.assertEqual(save_data.party_cost(data)['black'], 260)
-        save_data.remove_from_party(data, 0)
-        self.assertEqual(data['party'], [small['id']])
-        self.assertTrue(save_data.add_to_party(data, small['id']))    # 같은 프리셋 여러 번
-
     def test_delete_unit(self):
         data = save_data.new_game(1, self.dir, now=0.0)
         a = save_data.add_unit(data, 'tank', {}, {'black': 1}, self.dir)
@@ -147,16 +133,42 @@ class UnitSaveTest(unittest.TestCase):
         save_data.add_to_party(data, a['id'])
         self.assertTrue(save_data.delete_unit(data, a['id'], self.dir))
         self.assertEqual([u['id'] for u in data['units']], [b['id']])
-        self.assertEqual(data['party'], [b['id']])                     # 고른 것도 빠진다
+        self.assertEqual(data['party'], [None, b['id'], None, None, None, None])   # 놓은 자리도 빈다
         self.assertFalse(os.path.exists(save_data.unit_path(1, a['id'], self.dir)))
         self.assertFalse(save_data.delete_unit(data, a['id'], self.dir))
 
-    def test_party_max(self):
+    def test_party_slots_within_ink(self):
+        data = save_data.new_game(1, self.dir, now=0.0)          # 검정 START_INK
+        big = save_data.add_unit(data, 'tank', {}, {'black': 200}, self.dir)
+        small = save_data.add_unit(data, 'melee', {}, {'black': 60}, self.dir)
+        red = save_data.add_unit(data, 'ranged', {}, {'red': 5}, self.dir)
+        self.assertEqual(save_data.add_to_party(data, big['id']), 0)    # 앞자리부터
+        self.assertIsNone(save_data.add_to_party(data, big['id']))       # 400 > 300
+        self.assertTrue(save_data.place(data, 4, small['id']))           # 고른 자리에
+        self.assertFalse(save_data.place(data, 2, red['id']))            # 빨강은 없다
+        self.assertEqual(data['party'], [big['id'], None, None, None, small['id'], None])
+        self.assertEqual(save_data.party_cost(data)['black'], 260)
+        self.assertTrue(save_data.place(data, 0, small['id']))           # 바꿔 놓기: 있던 유닛은 빠진다고 친다
+        self.assertEqual(save_data.party_cost(data)['black'], 120)
+        save_data.swap_slots(data, 0, 5)
+        self.assertEqual(data['party'], [None, None, None, None, small['id'], small['id']])
+        save_data.remove_from_party(data, 4)
+        self.assertEqual(data['party'][4], None)
+
+    def test_party_full(self):
         data = save_data.new_game(1, self.dir, now=0.0)
         u = save_data.add_unit(data, 'tank', {}, {'black': 1}, self.dir)
-        for _ in range(save_data.PARTY_MAX):
-            self.assertTrue(save_data.add_to_party(data, u['id']))
-        self.assertFalse(save_data.add_to_party(data, u['id']))
+        for i in range(save_data.PARTY_MAX):
+            self.assertEqual(save_data.add_to_party(data, u['id']), i)
+        self.assertIsNone(save_data.add_to_party(data, u['id']))
+        self.assertTrue(save_data.place(data, 3, u['id']))               # 꽉 차도 바꿔 놓기는 된다
+
+    def test_old_party_list_becomes_slots(self):
+        data = save_data.new_game(1, self.dir, now=0.0)
+        u = save_data.add_unit(data, 'tank', {}, {}, self.dir)
+        data['party'] = [u['id'], 99]                                    # 예전 세이브: id 목록, 없어진 프리셋
+        save_data.write(data, self.dir)
+        self.assertEqual(save_data.load(1, self.dir)['party'], [u['id'], None, None, None, None, None])
 
     def test_delete_removes_unit_images(self):
         data = save_data.new_game(3, self.dir, now=0.0)

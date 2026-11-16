@@ -8,7 +8,8 @@ pico2d 와 무관한 순수 로직이라 따로 테스트할 수 있다 (tests/t
 - delete(slot): 지우기 (그 슬롯의 유닛 그림도 함께)
 - add_unit(data, frame, counts, ink_used): 그린 유닛을 프리셋으로 적는다 (드는 잉크만 기록, 가진 잉크는 그대로). 그림은 unit_path() 에 저장
 - delete_unit(data, id): 프리셋 지우기 (그림 파일도, 내 유닛에 고른 것도 함께)
-- party: 내 유닛 화면에서 고른 유닛 (프리셋 id 목록, 같은 프리셋을 여러 번 고를 수 있다). 드는 잉크 합이 가진 잉크를 넘지 않게 can_add() 로 막는다
+- party: 내 유닛 화면에서 필드 자리(6칸: 앞줄 3 + 뒷줄 3)마다 놓은 프리셋 id. 같은 프리셋을 여러 번 놓을 수 있다.
+  드는 잉크 합이 가진 잉크를 넘지 않게 can_place() 로 막는다
 """
 import json
 import os
@@ -18,6 +19,7 @@ import time
 DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'saves')
 SLOTS = 3
 VERSION = 1
+PARTY_MAX = 6   # 필드에 놓는 자리 수: 0~2 앞줄(위·가운데·아래), 3~5 뒷줄
 START_INK = 300  # 처음 검정 잉크 양 (PRD 2.6: 처음엔 검정뿐) — 수치는 미정 사항, 나중에 조정
 
 current = None        # 지금 하고 있는 세이브 (dict)
@@ -46,7 +48,7 @@ def blank(slot, now=None):
         'intro_seen': False,  # 도입 이야기(컷씬)를 봤는가 — 보기 전이면 준비 화면 전에 보여 준다
         'ink': {'black': START_INK, 'red': 0, 'green': 0, 'blue': 0},
         'units': [],          # 그린 유닛 (프리셋): {'id', 'frame', 'counts', 'ink'} — 그림은 unit_path(slot, id)
-        'party': [],          # 내 유닛: 데리고 갈 프리셋 id 목록 (같은 id 가 여러 번 있어도 된다)
+        'party': [None] * PARTY_MAX,  # 내 유닛: 필드 자리마다 놓은 프리셋 id (빈 자리 None, 같은 id 여러 번 가능)
     }
 
 
@@ -67,6 +69,7 @@ def load(slot, folder=None):
     full = blank(slot, data.get('created_at'))
     full.update({k: v for k, v in data.items() if k in full})
     full['slot'] = slot
+    full['party'] = normalize_party(full['party'], full['units'])
     return full
 
 
@@ -127,15 +130,12 @@ def delete_unit(data, unit_id, folder=None):
     if not find_unit(data, unit_id):
         return False
     data['units'] = [u for u in data['units'] if u['id'] != unit_id]
-    data['party'] = [i for i in data['party'] if i != unit_id]
+    data['party'] = [None if i == unit_id else i for i in data['party']]
     try:
         os.remove(unit_path(data['slot'], unit_id, folder))
     except FileNotFoundError:
         pass
     return True
-
-
-PARTY_MAX = 6
 
 
 def find_unit(data, unit_id):
@@ -145,13 +145,24 @@ def find_unit(data, unit_id):
     return None
 
 
+def normalize_party(party, units=None):
+    """party 를 자리 PARTY_MAX 개짜리 목록으로 (빈 자리는 None). 예전 세이브의 id 목록도 앞자리부터 채운다.
+    units 를 주면 없어진 프리셋 자리는 비운다."""
+    ids = list(party) if isinstance(party, list) else []
+    ids = (ids + [None] * PARTY_MAX)[:PARTY_MAX]
+    if units is not None:
+        alive = {u['id'] for u in units}
+        ids = [i if i in alive else None for i in ids]
+    return ids
+
+
 def party_units(data):
-    """고른 유닛 기록 목록 (없어진 프리셋은 건너뛴다)."""
-    return [u for u in (find_unit(data, i) for i in data['party']) if u]
+    """자리에 놓인 유닛 기록 목록 (빈 자리는 건너뛴다)."""
+    return [u for u in (find_unit(data, i) for i in data['party'] if i is not None) if u]
 
 
 def party_cost(data):
-    """고른 유닛들에 드는 잉크 합 (색별)."""
+    """놓인 유닛들에 드는 잉크 합 (색별)."""
     total = {c: 0 for c in data['ink']}
     for u in party_units(data):
         for c, n in u.get('ink', {}).items():
@@ -159,25 +170,53 @@ def party_cost(data):
     return total
 
 
-def can_add(data, unit):
-    """이 유닛을 더 골라도 가진 잉크 안인가 (자리도 남았는가)."""
-    if len(party_units(data)) >= PARTY_MAX:
-        return False
+def can_place(data, unit, slot=None):
+    """unit 을 slot 에 놓아도 가진 잉크 안인가 (slot 에 있던 유닛은 빠진다고 친다).
+    slot 이 None 이면 빈 자리가 있어야 한다."""
+    if slot is None:
+        if None not in data['party']:
+            return False
+        old = None
+    else:
+        old = find_unit(data, data['party'][slot]) if data['party'][slot] is not None else None
     cost = party_cost(data)
+    for c, n in (old or {}).get('ink', {}).items():
+        cost[c] = cost.get(c, 0) - n
     return all(cost.get(c, 0) + n <= data['ink'].get(c, 0) for c, n in unit.get('ink', {}).items())
 
 
-def add_to_party(data, unit_id):
+def can_add(data, unit):
+    return can_place(data, unit)
+
+
+def place(data, slot, unit_id):
+    """slot 자리에 프리셋을 놓는다 (있던 유닛은 바뀐다). 잉크가 모자라면 False."""
     unit = find_unit(data, unit_id)
-    if not unit or not can_add(data, unit):
+    if not unit or not 0 <= slot < PARTY_MAX or not can_place(data, unit, slot):
         return False
-    data['party'].append(unit_id)
+    data['party'][slot] = unit_id
     return True
 
 
-def remove_from_party(data, index):
-    if 0 <= index < len(data['party']):
-        data['party'].pop(index)
+def add_to_party(data, unit_id):
+    """앞자리부터 첫 빈 자리에 놓는다. 놓은 자리 번호, 못 놓으면 None."""
+    unit = find_unit(data, unit_id)
+    if not unit or not can_place(data, unit):
+        return None
+    slot = data['party'].index(None)
+    data['party'][slot] = unit_id
+    return slot
+
+
+def remove_from_party(data, slot):
+    if 0 <= slot < PARTY_MAX:
+        data['party'][slot] = None
+
+
+def swap_slots(data, a, b):
+    """두 자리를 맞바꾼다 (한쪽이 비었으면 옮기기)."""
+    p = data['party']
+    p[a], p[b] = p[b], p[a]
 
 
 # ---------------------------------------------------------------- 지금 하고 있는 세이브
