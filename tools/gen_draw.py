@@ -5,7 +5,7 @@
 - card / card_on / card_empty: 프리셋(내가 그린 유닛) 카드
 - frame_<id> / frame_<id>_on: 틀 고르기 카드 (틀 실루엣 + 이름)
 - ink_ring: 고른 잉크 아래 동그라미, eraser: 지우개
-- button_save / button_clear / button_close (+ _hover)
+- button_save / button_clear / button_close / button_unequip (+ _hover)
 
 실행: python tools/gen_draw.py
 """
@@ -123,6 +123,7 @@ BUTTONS = (  # 파일 이름, 글씨, 색, 크기
     ('save', '저장하기', 'lemon', (190, 80)),
     ('clear', '다 지우기', 'pink', (190, 80)),
     ('close', '닫기', 'lavender', (190, 80)),
+    ('unequip', '다 빼기', 'peach', (190, 80)),     # 내 유닛 화면
 )
 
 
