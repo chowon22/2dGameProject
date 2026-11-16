@@ -4,6 +4,7 @@
   검은 잉크통을 안은 소년이 왼쪽에서 달려 들어와 오른쪽을 향해 계속 달린다 (3프레임 달리기)
 - 왼쪽 위: 지금 가진 잉크 (검정·빨강·초록·파랑), 가운데 위: 세이브 번호·진행 단계
 - 아래 버튼: 유닛 추가하기 / 잉크 섞기 / 내 유닛 / 출발하기! — 아직 만들지 않은 기능은 '곧 만들어요' 쪽지
+- 내 유닛 화면에서 필드에 놓은 유닛들이 같은 자리 그대로 소년 뒤를 따라 걷는다 (party_view)
 - 유닛 추가하기: 그 위에 유닛 그리기 화면(draw_mode)을 띄운다
 - 내 유닛: 그 위에 내 유닛 화면(units_mode)을 띄운다 — 가진 잉크 안에서 데리고 갈 유닛을 고른다
 - 타이틀로 / ESC: 저장하고 타이틀로. 나갈 때(창 닫기 포함) 저장한다
@@ -14,6 +15,7 @@ from pico2d import (clear_canvas, update_canvas, get_events, hide_cursor,
 import game_framework
 import save_data
 import text
+import party_view
 import title_mode
 from assets import image
 from title_effects import InkSplash
@@ -197,6 +199,7 @@ def draw_scene():
     draw_layer('far', H / 2)
     draw_layer('mid', H / 2)
     draw_layer('ground', layers['ground'].h / 2)
+    party_view.draw(t, boy_x(), GROUND - 4, shadow)   # 내 유닛이 소년 뒤를 따라 걷는다
     draw_boy()
 
 
