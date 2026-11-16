@@ -5,7 +5,8 @@
   카드에 마우스를 올리면 드는 잉크가 뜨고, × 를 두 번 누르면 그 프리셋을 지운다
 - 틀: 탱커(방패 기사) / 근접 딜러(검사) / 원거리 딜러(궁수) / 서포터(마법사)
 - 잉크: 검정·빨강·초록·파랑 잉크병 + 지우개 (병 옆 숫자는 가진 잉크, 그려도 줄지 않는다) · 체형: 작은 / 보통 / 큰
-- 종이 두 장: 왼쪽 사람 종이(체형별 밑그림), 오른쪽 무기 종이(무기 밑그림 — 원딜은 활과 화살이 따로).
+- 종이 여러 장: 왼쪽 사람 종이, 그 옆에 무기마다 한 장 (원딜은 활·화살 두 장). 체형에 따라 종이·밑그림 크기가 바뀐다.
+  틀·체형을 바꿔도 그리던 그림은 발 자리를 맞춰 옮겨 온다.
   들어오자마자 바로 그릴 수 있고, 붓질은 시작한 종이 안에서만 칠해진다. 커서 자리에 지금 붓 색·굵기의 점이 보인다.
   가진 잉크와 상관없이 어떤 색이든 마음껏 칠한다 (잉크는 내 유닛에서 놓을 때 따진다)
 오른쪽: 되돌리기 / 다 지우기 / 저장하기(프리셋에 더하고 드는 잉크를 적어 둔다) / 닫기
@@ -25,6 +26,7 @@ import prepare_mode
 import save_data
 import text
 import title_mode
+import unit_art
 import unit_cards
 from assets import image
 from live_image import LiveImage
@@ -43,12 +45,11 @@ PRESET_GAP, MAX_PRESETS = 124, 8
 FRAME_GAP = 216
 INK_GAP = 120
 BODY_X, BODY_GAP = 880, 100     # 체형 칸
-# 종이 두 장: 왼쪽 끝 x 와 윗변 y (pico). 실제로 칠하는 곳은 PERSON_W / GEAR_W x PAPER_H
-PAPER_Y = 222                   # 종이 가운데 y
-PAPER_T = PAPER_Y + frames.PAPER_H // 2
-PERSON_L, GEAR_L = ROW_X, ROW_X + frames.PERSON_W + 52
-SIDE_X = 1000                   # 오른쪽 칸 가운데
-SIDE_L, SIDE_R = 895, 1105      # 오른쪽 버튼 두 줄
+# 종이들: 아랫변을 PAPER_B 에 맞춰 ROW_X 부터 SHEET_GAP 간격으로 나란히 (pico 좌표)
+PAPER_B = 26
+SHEET_GAP = 30
+SIDE_X = 1040                   # 오른쪽 칸 가운데
+SIDE_L, SIDE_R = 940, 1140      # 오른쪽 버튼 두 줄
 TOOLS = painter.COLORS + (painter.ERASER,)
 NAMES = {'black': '검정', 'red': '빨강', 'green': '초록', 'blue': '파랑'}
 
@@ -56,19 +57,21 @@ NAMES = {'black': '검정', 'red': '빨강', 'green': '초록', 'blue': '파랑'
 class Sheet:
     """종이 한 장: 칠한 내용(Paper) + 화면에 올린 텍스처 + 자리."""
 
-    def __init__(self, kind, left, w):
-        self.kind, self.left, self.w = kind, left, w
-        self.paper = painter.Paper(w, frames.PAPER_H)
-        self.tex = LiveImage(w, frames.PAPER_H)
-        self.paper.dirty = (0, 0, w, frames.PAPER_H)
-        self.cx = left + w / 2
+    def __init__(self, label, guide, left, size):
+        self.label, self.guide, self.left = label, guide, left
+        self.w, self.h = size
+        self.paper = painter.Paper(self.w, self.h)
+        self.tex = LiveImage(self.w, self.h)
+        self.paper.dirty = (0, 0, self.w, self.h)
+        self.cx, self.cy = left + self.w / 2, PAPER_B + self.h / 2
+        self.top = PAPER_B + self.h
 
     def local(self, mx, my, clamp=False):
         """화면 좌표 → 이 종이 좌표 (왼쪽 위 0,0). 밖이면 None (clamp 면 가장자리 너머로 조금까지)."""
-        px, py = mx - self.left, PAPER_T - my
+        px, py = mx - self.left, self.top - my
         if clamp:
-            return min(max(px, -1), self.w), min(max(py, -1), frames.PAPER_H)
-        if 0 <= px < self.w and 0 <= py < frames.PAPER_H:
+            return min(max(px, -1), self.w), min(max(py, -1), self.h)
+        if 0 <= px < self.w and 0 <= py < self.h:
             return px, py
         return None
 
@@ -80,14 +83,13 @@ class Sheet:
 
 
 panel = ink_wave = eraser_img = fade = toast_img = None
-paper_imgs = {}
 frame_imgs = {}
 body_imgs = {}
 ink_icons = {}
 brush_tips = {}         # 도구 → 커서 자리에 보일 붓 점
 buttons = []
-sheets = []             # [사람 종이, 무기 종이]
-edits = []              # 되돌리기 순서: 바꾼 종이 번호들 (한 번에 둘 다 바뀌면 (0, 1))
+sheets = []             # [사람 종이, 무기 종이 …]
+edits = []              # 되돌리기 순서: 바꾼 종이 번호들 (한 번에 여러 장 바뀌면 (0, 1, …))
 frame_id = frames.IDS[0]
 body = 'medium'
 tool = 'black'
@@ -140,13 +142,30 @@ def owned():
 
 
 def ink_used():
-    a, b = (s.paper.ink_used() for s in sheets)
-    return {c: a[c] + b[c] for c in painter.COLORS}
+    return {c: painter.ink_for(n) for c, n in counts().items()}
 
 
 def counts():
-    a, b = (s.paper.counts_dict() for s in sheets)
-    return {c: a[c] + b[c] for c in painter.COLORS}
+    return {c: sum(s.paper.count(c) for s in sheets) for c in painter.COLORS}
+
+
+def build_sheets(keep=True):
+    """지금 틀·체형의 종이들을 만든다. keep 이면 그리던 그림을 (발 자리를 맞춰) 새 종이로 옮긴다."""
+    global sheets, edits
+    f = frames.get(frame_id, body)
+    specs = [('사람', f'guide_person_{frame_id}_{body}', f['size'])] + \
+        [(g['name'], f'guide_gear_{frame_id}_{i}_{body}', g['size']) for i, g in enumerate(f['gear'])]
+    old = sheets if keep else []
+    new, x = [], ROW_X
+    for i, (label, guide, size) in enumerate(specs):
+        s = Sheet(label, guide, x, size)
+        if i < len(old) and not old[i].paper.is_empty():
+            s.paper.load_rgba(frames.fit(old[i].paper.rgba(), *size))
+            s.paper.history.clear()
+        new.append(s)
+        x += size[0] + SHEET_GAP
+    sheets = new
+    edits = []
 
 
 def say(msg):
@@ -167,36 +186,31 @@ def pick_tool(name):
 
 def pick_frame(fid):
     global frame_id
-    frame_id = fid
+    if fid != frame_id:
+        frame_id = fid
+        build_sheets()
 
 
 def pick_body(name):
     global body
-    body = name
+    if name != body:
+        body = name
+        build_sheets()
 
 
 def pick_preset(unit):
     global picked, frame_id, body
-    slot = save_data.current['slot']
-    paths = (save_data.unit_path(slot, unit['id']), save_data.gear_path(slot, unit['id']))
-    if not any(map(_exists, paths)):
+    if unit.get('frame') not in frames.IDS:
         say('그림 파일을 찾을 수 없어요')
         return
-    for s, path in zip(sheets, paths):
-        if _exists(path):
-            s.paper.load_png(path)
-        else:   # 무기 그림이 없는 예전 유닛
-            s.paper.clear()
-    record(0, 1)
-    picked = unit['id']
-    if unit.get('frame') in frames.IDS:
-        frame_id = unit['frame']
+    frame_id = unit['frame']
     body = unit.get('body', 'medium') if unit.get('body') in frames.BODIES else 'medium'
-
-
-def _exists(path):
-    import os
-    return os.path.exists(path)
+    build_sheets(keep=False)
+    person, gears = unit_art.load(save_data.current['slot'], unit)
+    for s, rgba in zip(sheets, [person] + gears):
+        s.paper.load_rgba(rgba)
+        s.paper.history.clear()
+    picked = unit['id']
 
 
 def save_unit():
@@ -209,7 +223,8 @@ def save_unit():
     unit = save_data.add_unit(save_data.current, frame_id, counts(), ink_used(), body=body)
     slot = save_data.current['slot']
     sheets[0].paper.save_png(save_data.unit_path(slot, unit['id']))
-    sheets[1].paper.save_png(save_data.gear_path(slot, unit['id']))
+    for i, s in enumerate(sheets[1:]):
+        s.paper.save_png(save_data.gear_path(slot, unit['id'], group=i))
     save_data.save_current()
     clear_paper()
     say(f'{frames.BODY_NAMES[body]} {frames.get(frame_id)["name"]} 유닛을 프리셋에 저장했어요!')
@@ -239,14 +254,13 @@ def close():
 
 # ---------------------------------------------------------------- 모드
 def init():
-    global panel, ink_wave, eraser_img, fade, toast_img, paper_imgs, frame_imgs, body_imgs, ink_icons
+    global panel, ink_wave, eraser_img, fade, toast_img, frame_imgs, body_imgs, ink_icons
     global brush_tips, buttons, sheets, edits, tool, picked, painting, deleter, toast, t
     panel = image('draw', 'panel.png')
     ink_wave = image('draw', 'ink_wave.png')
     eraser_img = image('draw', 'eraser.png')
     fade = image('common', 'fade.png')
     toast_img = image('prepare', 'toast.png')
-    paper_imgs = {k: image('draw', f'paper_{k}.png') for k in ('person', 'gear')}
     frame_imgs = {(f, on): image('draw', f'frame_{f}{"_on" if on else ""}.png')
                   for f in frames.IDS for on in (False, True)}
     body_imgs = {(b, on): image('draw', f'body_{b}{"_on" if on else ""}.png')
@@ -255,8 +269,8 @@ def init():
     if not brush_tips:
         brush_tips = {name: LiveImage(*tip.shape[1::-1], tip) for name, tip in
                       ((name, make_brush_tip(name)) for name in TOOLS)}
-    sheets = [Sheet('person', PERSON_L, frames.PERSON_W), Sheet('gear', GEAR_L, frames.GEAR_W)]
-    edits = []
+    sheets = []
+    build_sheets(keep=False)
     # 오른쪽 두 칸: 위 줄 되돌리기·다 지우기, 아래 줄 저장하기·닫기
     buttons = [Button(x, y, f'button_{name}.png', f'button_{name}_hover.png', action, 0.3 * i, 'draw')
                for i, (name, x, y, action) in enumerate((
@@ -440,13 +454,11 @@ def draw_brush_tip():
 
 
 def draw_papers():
-    guides = {'person': image('draw', f'guide_person_{frame_id}_{body}.png'),
-              'gear': image('draw', f'guide_gear_{frame_id}.png')}
     for s in sheets:
-        paper_imgs[s.kind].draw(s.cx, PAPER_Y)
-        guides[s.kind].draw(s.cx, PAPER_Y)
-        s.tex.draw(s.cx, PAPER_Y)
-        text.draw('사람' if s.kind == 'person' else '무기', s.left + 10, PAPER_T - 16, 20, (170, 154, 186))
+        image('draw', f'paper_{s.w}x{s.h}.png').draw(s.cx, s.cy)
+        image('draw', s.guide + '.png').draw(s.cx, s.cy)
+        s.tex.draw(s.cx, s.cy)
+        text.draw(s.label, s.left + 8, s.top - 16, 20, (170, 154, 186))
 
 
 def draw_side():
@@ -466,11 +478,11 @@ def draw_toast():
         return
     msg, left = toast
     a = min(1.0, left / 0.4, (TOAST_TIME - left) / 0.15)
-    x = (PERSON_L + GEAR_L + frames.GEAR_W) / 2
+    x, y = (sheets[0].left + sheets[-1].left + sheets[-1].w) / 2, PAPER_B + 200
     toast_img.opacify(a)
-    toast_img.draw(x, PAPER_Y)
+    toast_img.draw(x, y)
     toast_img.opacify(1)
-    text.draw(msg, x, PAPER_Y + 2, 28, INK, 'c', alpha=a)
+    text.draw(msg, x, y + 2, 28, INK, 'c', alpha=a)
 
 
 def draw():
