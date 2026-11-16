@@ -38,7 +38,7 @@ MONSTER_SCALE = 0.72
 ACT_TIME, HIT_AT = 0.62, 0.32              # 공격 한 번 걸리는 시간, 맞는 순간
 LUNGE = 0.42                               # 상대 쪽으로 다가가는 정도
 FADE_IN = 0.3
-HURT_MAX, HURT_MIN = 0.8, 0.15                # 맞은 뒤 투명도: 체력 가득 → 거의 없음
+HURT_MIN = stats.HURT_MIN                  # 쓰러질 때 여기서부터 사라진다
 HIT_FLASH = 0.3                            # 맞는 순간 흔들리며 흐려지는 시간
 
 stage_id = None
@@ -94,6 +94,8 @@ def make_views():
         if not unit:
             continue
         f = battle.Fighter('ally', slot, stats.unit_stats(unit), unit)
+        frac = save_data.hp_list(data)[slot]          # 지난 전투에서 다친 채로 (치료 안 했으면)
+        f.hp = 0 if frac <= 0 else max(1, round(f.max_hp * frac))
         allies.append(f)
         x, y = spot('ally', slot)
         views.append({'f': f, 'x': x, 'y': y, 'rig': unit_rig.rig(unit, UNIT_SCALE), 'name': unit_cards.label(unit),
@@ -134,8 +136,17 @@ def resume():
 
 
 # ---------------------------------------------------------------- 행동
+def save_hp():
+    """아군 남은 체력을 세이브의 자리별 체력에 적는다 (다친 상태가 다음 전투까지 이어진다)."""
+    hp = save_data.hp_list(save_data.current)
+    for f in battle_state.allies:
+        hp[f.slot] = f.hp / f.max_hp
+    save_data.save_current()
+
+
 def leave():
-    """스테이지 고르기로 (전투 화면과 출전 준비 화면을 함께 닫는다)."""
+    """스테이지 고르기로 (전투 화면과 출전 준비 화면을 함께 닫는다). 도망쳐도 다친 건 그대로."""
+    save_hp()
     game_framework.pop_mode()
     game_framework.pop_mode()
 
@@ -201,7 +212,7 @@ def after_action():
         result = res
         if res == 'win':
             reward = stages.clear(save_data.current, stage_id)
-            save_data.save_current()
+        save_hp()
         return
     if battle_state.turn == 'enemy':
         if not enemy_turn:   # 적 차례가 막 시작됨: 이번 차례에 움직일 적들
@@ -293,7 +304,7 @@ def opacity(v):
     f = v['f']
     if not f.alive:
         return max(0.0, HURT_MIN - v['dead_t'] * 0.5)
-    a = 1.0 if f.hp >= f.max_hp else HURT_MIN + (HURT_MAX - HURT_MIN) * f.hp / f.max_hp
+    a = stats.hurt_alpha(f.hp / f.max_hp)
     if v.get('shake'):
         a *= 0.45 + 0.55 * (1 - v['shake'] / HIT_FLASH)   # 맞는 순간 확 흐려졌다가 돌아옴
     return a
@@ -363,7 +374,8 @@ def draw_result():
         text.draw(got or '없음', W / 2, 374, 30, INK, 'c')
     else:
         text.draw('졌어요…', W / 2, 470, 44, INK, 'c')
-        text.draw('그림을 더 칠하거나 자리를 바꿔서 다시 와요', W / 2, 400, 26, SOFT, 'c')
+        text.draw('그림을 더 칠하거나 자리를 바꿔서 다시 와요', W / 2, 410, 26, SOFT, 'c')
+        text.draw('다친 유닛은 내 유닛에서 치료해요', W / 2, 374, 22, SOFT, 'c')
     end_button.draw()
 
 
