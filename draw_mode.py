@@ -6,6 +6,7 @@
 - 잉크: 검정·빨강·초록·파랑 잉크병 + 지우개. 병 옆 숫자는 가진 잉크 (그려도 줄지 않는다)
 - 종이: 들어오자마자 바로 그릴 수 있다. 가진 잉크와 상관없이 어떤 색이든 마음껏 칠한다
   (잉크는 내 유닛에서 고를 때 따진다)
+프리셋 카드에 마우스를 올리면 × 가 뜨고, 두 번 누르면 그 프리셋을 지운다
 오른쪽: 저장하기(프리셋에 더하고 이 유닛에 드는 잉크를 적어 둔다 — 가진 잉크는 그대로) / 다 지우기 / 닫기
 
 키: 1~4 잉크, E 지우개, ESC 닫기
@@ -55,6 +56,7 @@ frame_id = frames.IDS[0]
 tool = 'black'
 picked = None           # 지금 종이에 올린 프리셋 id
 painting = False
+deleter = None
 toast = None
 t = 0.0
 
@@ -87,6 +89,10 @@ def hit(x, y, w, h, mx, my):
 def shown_units():
     units = save_data.current['units'] if save_data.current else []
     return units[-MAX_PRESETS:]
+
+
+def preset_cards():
+    return [(u, preset_x(i), PRESET_Y) for i, u in enumerate(shown_units())]
 
 
 def owned():
@@ -151,7 +157,7 @@ def close():
 # ---------------------------------------------------------------- 모드
 def init():
     global panel, paper_img, ink_ring, eraser_img, fade, toast_img, frame_imgs, ink_icons
-    global silhouettes, buttons, paper, paper_tex, tool, picked, painting, toast, t
+    global silhouettes, buttons, paper, paper_tex, tool, picked, painting, deleter, toast, t
     panel = image('draw', 'panel.png')
     paper_img = image('draw', 'paper.png')
     ink_ring = image('draw', 'ink_ring.png')
@@ -173,6 +179,7 @@ def init():
     tool = 'black'
     picked = None
     painting = False
+    deleter = unit_cards.Deleter()
     toast = None
     t = 0.0
     title_mode.move_mouse(title_mode.mouse)
@@ -200,8 +207,17 @@ def move_mouse(pos):
 
 
 def click(mx, my):
-    global painting
+    global painting, picked
     if any(b.click(mx, my) for b in buttons):
+        return
+    gone = deleter.click(preset_cards(), mx, my)
+    if gone == 'asked':
+        say('한 번 더 누르면 이 프리셋을 지워요')
+        return
+    if gone is not None:
+        if gone == picked:
+            picked = None   # 종이에 올려 둔 그림은 그대로 둔다
+        say('프리셋을 지웠어요')
         return
     for i, unit in enumerate(shown_units()):
         if unit_cards.hit(preset_x(i), PRESET_Y, mx, my):
@@ -237,6 +253,7 @@ def handle_events():
         elif event.type == SDL_MOUSEMOTION:
             mx, my = title_mode.to_canvas(event)
             move_mouse((mx, my))
+            deleter.move(preset_cards(), mx, my)
             for b in buttons:
                 b.mouse_move(mx, my)
             if painting:
@@ -277,7 +294,7 @@ def draw_presets():
         text.draw('그려서 저장하면 여기에 생겨요', preset_x(0) + 76, PRESET_Y, 26, (150, 128, 170))
         return
     for i, unit in enumerate(units):
-        unit_cards.draw(unit, preset_x(i), PRESET_Y, on=unit['id'] == picked)
+        unit_cards.draw(unit, preset_x(i), PRESET_Y, on=unit['id'] == picked, delete=deleter.state(unit))
 
 
 def draw_frames():
