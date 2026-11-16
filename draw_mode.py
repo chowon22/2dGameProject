@@ -45,8 +45,9 @@ PRESET_GAP, MAX_PRESETS = 124, 8
 FRAME_GAP = 216
 INK_GAP = 120
 BODY_X, BODY_GAP = 880, 100     # 체형 칸
-# 종이들: 아랫변을 PAPER_B 에 맞춰 ROW_X 부터 SHEET_GAP 간격으로 나란히 (pico 좌표)
-PAPER_B = 26
+# 종이들: 종이 칸(AREA) 가운데에 SHEET_GAP 간격으로 나란히, 아랫변을 맞춰서 (pico 좌표).
+# 체형마다 종이 크기가 달라도 늘 칸 가운데에 온다
+AREA_L, AREA_R, AREA_B, AREA_T = ROW_X - 10, 836, 26, 428
 SHEET_GAP = 30
 SIDE_X = 1040                   # 오른쪽 칸 가운데
 SIDE_L, SIDE_R = 940, 1140      # 오른쪽 버튼 두 줄
@@ -57,14 +58,14 @@ NAMES = {'black': '검정', 'red': '빨강', 'green': '초록', 'blue': '파랑'
 class Sheet:
     """종이 한 장: 칠한 내용(Paper) + 화면에 올린 텍스처 + 자리."""
 
-    def __init__(self, label, guide, left, size):
+    def __init__(self, label, guide, left, bottom, size):
         self.label, self.guide, self.left = label, guide, left
         self.w, self.h = size
         self.paper = painter.Paper(self.w, self.h)
         self.tex = LiveImage(self.w, self.h)
         self.paper.dirty = (0, 0, self.w, self.h)
-        self.cx, self.cy = left + self.w / 2, PAPER_B + self.h / 2
-        self.top = PAPER_B + self.h
+        self.cx, self.cy = left + self.w / 2, bottom + self.h / 2
+        self.top = bottom + self.h
 
     def local(self, mx, my, clamp=False):
         """화면 좌표 → 이 종이 좌표 (왼쪽 위 0,0). 밖이면 None (clamp 면 가장자리 너머로 조금까지)."""
@@ -156,9 +157,11 @@ def build_sheets(keep=True):
     specs = [('사람', f'guide_person_{frame_id}_{body}', f['size'])] + \
         [(g['name'], f'guide_gear_{frame_id}_{i}_{body}', g['size']) for i, g in enumerate(f['gear'])]
     old = sheets if keep else []
-    new, x = [], ROW_X
+    total_w = sum(sz[0] for _, _, sz in specs) + SHEET_GAP * (len(specs) - 1)
+    bottom = round((AREA_B + AREA_T) / 2 - max(sz[1] for _, _, sz in specs) / 2)
+    new, x = [], round((AREA_L + AREA_R) / 2 - total_w / 2)
     for i, (label, guide, size) in enumerate(specs):
-        s = Sheet(label, guide, x, size)
+        s = Sheet(label, guide, x, bottom, size)
         if i < len(old) and not old[i].paper.is_empty():
             s.paper.load_rgba(frames.fit(old[i].paper.rgba(), *size))
             s.paper.history.clear()
@@ -478,7 +481,7 @@ def draw_toast():
         return
     msg, left = toast
     a = min(1.0, left / 0.4, (TOAST_TIME - left) / 0.15)
-    x, y = (sheets[0].left + sheets[-1].left + sheets[-1].w) / 2, PAPER_B + 200
+    x, y = (sheets[0].left + sheets[-1].left + sheets[-1].w) / 2, (AREA_B + AREA_T) / 2
     toast_img.opacify(a)
     toast_img.draw(x, y)
     toast_img.opacify(1)
