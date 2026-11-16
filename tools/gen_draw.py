@@ -5,11 +5,11 @@
 - card / card_on / card_empty: 프리셋(내가 그린 유닛) 카드
 - guide_<id>: 종이에 깔리는 틀 밑그림 — 역할별 귀여운 생물(frames.py)을 삐뚤빼뚤한 연필 점선으로
 - frame_<id> / frame_<id>_on: 틀 고르기 카드 (밑그림 + 이름)
-- ink_wave: 고른 잉크 아래 구불구불한 밑줄 (형광펜처럼), eraser: 지우개
+- ink_wave: 고른 잉크 아래 펜으로 쓱 그은 검정 밑줄, eraser: 지우개
 - tab_<all|틀 id> / _on: 내 유닛 화면의 프리셋 나누기 칸 (전체·탱커·근접 딜러·원거리 딜러·서포터)
 - field / spot / spot_on / spot_enemy: 내 유닛 화면의 필드 미리보기 (흑백 들판 + 우리 자리 6칸·적 자리 점선 타원)
 - card_del / card_del_confirm: 프리셋 카드 모서리의 지우기 × (한 번 누르면 붉게 → 한 번 더 누르면 지움)
-- button_save / button_clear / button_close / button_unequip (+ _hover)
+- button_save / button_clear / button_close / button_unequip / button_undo (+ _hover)
 
 실행: python tools/gen_draw.py
 """
@@ -249,11 +249,12 @@ def card_del(confirm):
 
 
 def ink_wave():
-    w, h = 76, 22
-    sh = Sheet(w, h, seed=951)
-    pts = [(8 + (w - 16) * i / 40, h / 2 + 4.2 * math.sin(i / 40 * math.pi * 3)) for i in range(41)]
-    sh.stroke(pts, 7.0, color=(246, 206, 92), alpha=210, amp=0.3, taper=False)      # 노란 형광펜
-    sh.stroke(pts, 2.4, color=(214, 160, 52), alpha=200, amp=0.3)                   # 가운데 진한 선
+    """고른 잉크 밑줄: 사람이 펜으로 쓱 그은 듯한 검정 선 (거의 곧고 살짝만 구불)."""
+    w, h = 72, 16
+    sh = Sheet(w, h, seed=953)
+    pts = [(8 + (w - 16) * i / 20, h / 2 + 1.6 * math.sin(i / 20 * math.pi * 1.3 + 0.4) - 0.8 * i / 20)
+           for i in range(21)]
+    sh.stroke(pts, 3.2, color=(44, 38, 56), alpha=235, amp=0.7)
     return sh.result()
 
 
@@ -273,6 +274,7 @@ BUTTONS = (  # 파일 이름, 글씨, 색, 크기
     ('clear', '다 지우기', 'pink', (190, 80)),
     ('close', '닫기', 'lavender', (190, 80)),
     ('unequip', '다 빼기', 'peach', (190, 80)),     # 내 유닛 화면
+    ('undo', '되돌리기', 'mint', (190, 80)),
 )
 
 
