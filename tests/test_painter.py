@@ -94,31 +94,91 @@ class PaperTest(unittest.TestCase):
 
 
 class FramesTest(unittest.TestCase):
-    def test_four_frames_with_parts(self):
+    def trace(self, parts, w):
+        """틀 부위 윤곽을 그대로 따라 그린 종이."""
+        p = Paper(w, frames.PAPER_H)
+        for part in parts:
+            pts = frames.outline(part, 40)
+            p.begin(*pts[0], 'black', PLENTY)
+            for q in pts[1:]:
+                p.drag(*q, 'black', PLENTY)
+        return p.rgba()
+
+    def test_roles_bodies_and_parts(self):
         self.assertEqual(frames.IDS, ('tank', 'melee', 'ranged', 'support'))
+        self.assertEqual(frames.BODIES, ('small', 'medium', 'large'))
         for fid in frames.IDS:
-            m = frames.part_mask(fid)
-            self.assertEqual(m.shape, (frames.PAPER_H, frames.PAPER_W))
-            self.assertEqual(set(m.ravel()) - {0}, set(range(1, len(frames.part_names(fid)) + 1)))
+            for body in frames.BODIES:
+                m = frames.part_mask(fid, body)
+                self.assertEqual(m.shape, (frames.PAPER_H, frames.PERSON_W))
+                counts = np.bincount(m.ravel(), minlength=len(frames.part_names(fid, body)) + 1)
+                self.assertTrue((counts[1:] > 50).all(), (fid, body))     # 가려져 사라진 부위가 없다
+                ys, xs = np.nonzero(m)
+                self.assertGreater(xs.min(), 2, (fid, body))               # 종이 안에 다 들어간다
+                self.assertLess(xs.max(), frames.PERSON_W - 2, (fid, body))
+                self.assertGreater(ys.min(), 0, (fid, body))
 
-    def test_every_part_shows(self):
-        for fid in frames.IDS:   # 뒤 부위에 완전히 가려진 부위가 없어야 한다
-            counts = np.bincount(frames.part_mask(fid).ravel(), minlength=len(frames.part_names(fid)) + 1)
-            self.assertTrue((counts[1:] > 50).all(), fid)
+    def test_same_pose_for_every_role(self):
+        """몸·팔·다리·머리는 역할이 달라도 똑같다 (머리 장식과 무기만 다르다)."""
+        common = ('leg_l', 'leg_r', 'body', 'arm_l', 'arm_r', 'head')
+        for body in frames.BODIES:
+            ref = {p[0]: p for p in frames.get('tank', body)['parts'] if p[0] in common}
+            for fid in frames.IDS:
+                got = {p[0]: p for p in frames.get(fid, body)['parts'] if p[0] in common}
+                self.assertEqual(got, ref, (fid, body))
 
+    def test_bodies_differ_in_size(self):
+        def size(body):
+            ys, xs = np.nonzero(frames.part_mask('melee', body))
+            return xs.max() - xs.min(), ys.max() - ys.min()
+        small, medium, large = (size(b) for b in frames.BODIES)
+        self.assertLess(small[0], medium[0])
+        self.assertLess(medium[0], large[0])
+        self.assertLess(small[1], medium[1])
 
-    def test_gear_is_apart_from_body(self):
-        """무기·방패는 몸·손과 떨어져 있어야 한다 (따로 애니메이션 하려고)."""
+    def test_gear_groups_are_apart(self):
+        """무기 종이: 묶음(활·화살)끼리 떨어져 있고 종이 안에 있다."""
         from PIL import Image, ImageFilter
         for fid in frames.IDS:
-            mask = frames.part_mask(fid)
-            names = frames.part_names(fid)
-            gear_ids = [names.index(g) + 1 for g in frames.gear_names(fid)]
-            gear = np.isin(mask, gear_ids)
-            body = (mask > 0) & ~gear
-            near = np.asarray(Image.fromarray((gear * 255).astype(np.uint8)).filter(
-                ImageFilter.MaxFilter(frames.GEAR_GAP * 2 + 1))) > 0
-            self.assertFalse((near & body).any(), fid)
+            m = frames.gear_mask(fid)
+            ys, xs = np.nonzero(m)
+            self.assertGreater(xs.min(), 2, fid)
+            self.assertLess(xs.max(), frames.GEAR_W - 2, fid)
+            for i in range(1, len(frames.gear_groups(fid)) + 1):
+                near = np.asarray(Image.fromarray(((m == i) * 255).astype(np.uint8)).filter(
+                    ImageFilter.MaxFilter(frames.GEAR_GAP * 2 + 1))) > 0
+                self.assertFalse((near & (m > 0) & (m != i)).any(), (fid, i))
+        self.assertEqual(len(frames.gear_groups('ranged')), 2)   # 활과 화살은 따로
+
+    def test_split_gear(self):
+        for fid in frames.IDS:
+            gear = self.trace([p for g in frames.gear_groups(fid) for p in g['parts']], frames.GEAR_W)
+            pieces = frames.split_gear(gear, fid)
+            self.assertEqual(len(pieces), len(frames.gear_groups(fid)))
+            alphas = np.stack([pc[..., 3] > 0 for pc in pieces])
+            self.assertTrue((alphas.any(0) == (gear[..., 3] > 0)).all(), fid)   # 빠짐없이
+            self.assertTrue((alphas.sum(0) <= 1).all(), fid)                     # 겹치지 않게
+            self.assertTrue((alphas.sum((1, 2)) > 100).all(), fid)
+
+    def test_held_moves_pivot_to_hand(self):
+        for fid in frames.IDS:
+            for body in frames.BODIES:
+                for i, g in enumerate(frames.get(fid, body)['gear']):
+                    hx, hy = frames.held(fid, i, g['pivot'], body)
+                    self.assertAlmostEqual(hx, g['to'][0])
+                    self.assertAlmostEqual(hy, g['to'][1])
+        # 화살은 눕는다: 위(촉) → 오른쪽
+        g = frames.get('ranged')['gear'][1]
+        tip = frames.held('ranged', 1, (g['pivot'][0], g['pivot'][1] - 100))
+        self.assertAlmostEqual(tip[0], g['to'][0] + 100)
+        self.assertAlmostEqual(tip[1], g['to'][1])
+
+    def test_fit(self):
+        big = np.zeros((390, 760, 4), np.uint8)
+        big[195, 380] = 255
+        out = frames.fit(big, frames.PERSON_W)
+        self.assertEqual(out.shape, (frames.PAPER_H, frames.PERSON_W, 4))
+        self.assertEqual(out[195, frames.PERSON_W // 2, 3], 255)
 
 
 class UnitSaveTest(unittest.TestCase):
@@ -133,8 +193,9 @@ class UnitSaveTest(unittest.TestCase):
 
     def test_add_unit_records_cost_without_spending(self):
         data = save_data.new_game(1, self.dir, now=0.0)
-        unit = save_data.add_unit(data, 'tank', {'black': 250}, {'black': 10}, self.dir)
+        unit = save_data.add_unit(data, 'tank', {'black': 250}, {'black': 10}, self.dir, body='large')
         self.assertEqual(unit['id'], 1)
+        self.assertEqual(unit['body'], 'large')
         self.assertEqual(unit['ink'], {'black': 10})
         self.assertEqual(data['ink']['black'], save_data.START_INK)   # 가진 잉크는 그대로
         self.assertTrue(os.path.isdir(save_data.units_dir(1, self.dir)))
@@ -191,6 +252,7 @@ class UnitSaveTest(unittest.TestCase):
         data = save_data.new_game(3, self.dir, now=0.0)
         save_data.add_unit(data, 'tank', {}, {}, self.dir)
         open(save_data.unit_path(3, 1, self.dir), 'wb').close()
+        open(save_data.gear_path(3, 1, self.dir), 'wb').close()
         save_data.delete(3, self.dir)
         self.assertFalse(os.path.exists(save_data.units_dir(3, self.dir)))
 

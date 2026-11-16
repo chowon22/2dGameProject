@@ -47,7 +47,7 @@ def blank(slot, now=None):
         'stage': 0,           # 여정 진행 (0 = 아직 첫 필드 전)
         'intro_seen': False,  # 도입 이야기(컷씬)를 봤는가 — 보기 전이면 준비 화면 전에 보여 준다
         'ink': {'black': START_INK, 'red': 0, 'green': 0, 'blue': 0},
-        'units': [],          # 그린 유닛 (프리셋): {'id', 'frame', 'counts', 'ink'} — 그림은 unit_path(slot, id)
+        'units': [],          # 그린 유닛 (프리셋): {'id', 'frame', 'body', 'counts', 'ink'} — 그림은 unit_path·gear_path
         'party': [None] * PARTY_MAX,  # 내 유닛: 필드 자리마다 놓은 프리셋 id (빈 자리 None, 같은 id 여러 번 가능)
     }
 
@@ -115,11 +115,16 @@ def unit_path(slot, unit_id, folder=None):
     return os.path.join(units_dir(slot, folder), f'unit_{unit_id}.png')
 
 
-def add_unit(data, frame, counts, ink_used, folder=None):
+def gear_path(slot, unit_id, folder=None):
+    """무기 종이 그림."""
+    return os.path.join(units_dir(slot, folder), f'unit_{unit_id}_gear.png')
+
+
+def add_unit(data, frame, counts, ink_used, folder=None, body='medium'):
     """유닛 기록을 더한다. 가진 잉크는 줄지 않고, 이 유닛을 꺼낼 때 드는 잉크(ink_used)만 적어 둔다.
-    그림 PNG 는 부른 쪽이 unit_path(slot, 돌려준 id) 에 저장한다 (폴더는 여기서 만들어 둔다)."""
+    그림 PNG 는 부른 쪽이 unit_path(사람 종이)·gear_path(무기 종이) 에 저장한다 (폴더는 여기서 만들어 둔다)."""
     unit_id = max((u['id'] for u in data['units']), default=0) + 1
-    unit = {'id': unit_id, 'frame': frame, 'counts': dict(counts), 'ink': dict(ink_used)}
+    unit = {'id': unit_id, 'frame': frame, 'body': body, 'counts': dict(counts), 'ink': dict(ink_used)}
     data['units'].append(unit)
     os.makedirs(units_dir(data['slot'], folder), exist_ok=True)
     return unit
@@ -131,10 +136,11 @@ def delete_unit(data, unit_id, folder=None):
         return False
     data['units'] = [u for u in data['units'] if u['id'] != unit_id]
     data['party'] = [None if i == unit_id else i for i in data['party']]
-    try:
-        os.remove(unit_path(data['slot'], unit_id, folder))
-    except FileNotFoundError:
-        pass
+    for path in (unit_path(data['slot'], unit_id, folder), gear_path(data['slot'], unit_id, folder)):
+        try:
+            os.remove(path)
+        except FileNotFoundError:
+            pass
     return True
 
 

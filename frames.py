@@ -1,21 +1,34 @@
-"""유닛 틀 4종 (PRD 4.1). pico2d 와 무관한 순수 데이터·로직.
+"""유닛 틀: 역할 4종 (PRD 4.1) x 체형 3종. pico2d 와 무관한 순수 데이터·로직.
 
-틀마다 역할이 떠오르는 귀여운 꼬마 하나: 탱커 = 큰 방패 기사, 근접 딜러 = 칼 든 검사, 원거리 딜러 = 활 든 궁수,
-서포터 = 별 지팡이 마법사.
-- parts: 부위(머리·몸통·팔·다리 …)마다 타원('e') 또는 다각형('p'). 뒤에 적은 부위가 겹친 곳을 차지한다
-- details: 눈·입·방패 무늬·활시위 같은 밑그림 선 (부위는 아님)
-- gear: 무기·방패 부위. 몸·손과 GEAR_GAP 넘게 떨어져 있어 따로 움직이기(애니메이션) 쉽다
-종이에 깔리는 점선 밑그림은 tools/gen_draw.py 가 이 데이터로 그린다 (image/draw/guide_<id>.png).
+역할마다 귀여운 꼬마 하나: 탱커 = 큰 방패 기사, 근접 딜러 = 칼 든 검사, 원거리 딜러 = 활과 화살 든 궁수,
+서포터 = 별 지팡이 마법사. 넷 모두 같은 몸·자세(팔은 옆으로 내림)이고 머리 장식과 무기만 다르다.
+체형(BODIES): 작은 / 보통 / 큰 — 사람(머리·장식 포함)을 발 자리를 기준으로 늘이거나 줄인다.
+
+종이는 두 장이다:
+- 사람 종이 (PERSON_W x PAPER_H): get(역할, 체형) 의 parts·details
+- 무기 종이 (GEAR_W x PAPER_H): get(역할) 의 gear 묶음들 — 체형과 상관없이 같다.
+  묶음마다 parts, details, 쥐는 점 pivot(무기 종이 위), 손에 쥐었을 때 그 점이 갈 자리 to(사람 종이 위), 돌리는 각 angle.
+  묶음(활과 화살처럼)끼리는 GEAR_GAP 넘게 떨어져 있어 따로 떼어 움직이기 쉽다
+- split_gear(): 무기 종이 그림을 묶음별로 나눈다, held(): 무기를 손에 쥐었을 때 사람 종이 위 자리
+종이에 깔리는 점선 밑그림은 tools/gen_draw.py 가 이 데이터로 그린다.
 part_mask() 는 픽셀마다 어느 부위인지 알려 준다 (그림을 부위 PNG 로 나눌 때, PRD 9.1 #4).
-좌표는 종이(PAPER_W x PAPER_H)의 왼쪽 위 (0, 0) 기준.
+좌표는 각 종이의 왼쪽 위 (0, 0) 기준.
 """
 import math
 
 import numpy as np
 from PIL import Image, ImageDraw
 
-PAPER_W, PAPER_H = 500, 390   # 꼬마 틀(소품 포함 폭 ~340)에 맞춘 크기
-CX = PAPER_W // 2
+PERSON_W, GEAR_W, PAPER_H = 280, 200, 390
+X = PERSON_W // 2              # 사람 가운데 x
+WX = GEAR_W // 2               # 무기 종이 가운데 x
+FOOT = 366                     # 발바닥 y — 체형을 늘이고 줄이는 기준
+GEAR_GAP = 14
+
+BODIES = ('small', 'medium', 'large')
+BODY_NAMES = {'small': '작은', 'medium': '보통', 'large': '큰'}
+SHORT_NAMES = {'tank': '탱커', 'melee': '근딜', 'ranged': '원딜', 'support': '서포터'}   # 카드처럼 좁은 곳
+BODY_SCALE = {'small': (0.8, 0.8), 'medium': (1.0, 1.0), 'large': (1.22, 1.04)}   # (가로, 세로)
 
 
 def _arc(cx, cy, rx, ry, a0, a1, n=12):
@@ -60,77 +73,128 @@ def _face(x, y, cheeks=False):
     return tuple(out)
 
 
-# 꼬마 사람 넷: 큰 머리, 작은 몸 (2.5 등신). X 는 사람 가운데 (소품이 오른쪽에 있어 조금 왼쪽으로)
-_T, _M, _R, _S = CX - 70, CX - 50, CX - 60, CX - 50
-# 무기·방패(gear)는 손·몸에서 GEAR_GAP 넘게 떨어뜨려 둔다 → 나중에 따로 떼어 흔들거나 휘두르는 애니메이션을 붙이기 쉽게
-GEAR_GAP = 14
+# ---------------------------------------------------------------- 사람 (보통 체형 기준)
+# 네 역할이 함께 쓰는 몸 (머리는 장식 아래 깔려야 해서 따로)
+_BODY = (
+    ('leg_l', 'e', X - 26, 332, 20, 34), ('leg_r', 'e', X + 26, 332, 20, 34),
+    ('body', 'p', [(X - 46, 180), (X + 46, 180), (X + 56, 302), (X - 56, 302)]),
+    ('arm_l', 'e', X - 66, 236, 18, 40), ('arm_r', 'e', X + 66, 236, 18, 40))
+_HEAD = ('head', 'e', X, 132, 64, 58)
+_BELT = [(X - 50, 252), (X + 50, 252)]
 
-FRAMES = (
-    {'id': 'tank', 'name': '탱커', 'stat': '체력', 'look': '큰 방패를 든 꼬마 기사', 'gear': ('shield',),
-     'parts': (
-         ('leg_l', 'e', _T - 28, 330, 22, 34), ('leg_r', 'e', _T + 28, 330, 22, 34),
-         ('body', 'p', [(_T - 58, 178), (_T + 58, 178), (_T + 68, 302), (_T - 68, 302)]),
-         ('arm_l', 'e', _T - 78, 234, 20, 40), ('arm_r', 'e', _T + 78, 234, 20, 40),
-         ('shield', 'p', [(_T + 122, 160), (_T + 244, 160), (_T + 244, 250), (_T + 183, 330), (_T + 122, 250)]),
-         ('head', 'e', _T, 132, 66, 58),
-         ('helmet', 'p', _arc(_T, 132, 74, 70, 180, 360, 18) + [(_T + 74, 118), (_T - 74, 118)])),
-     'details': _face(_T, 146) + (
-         [(_T - 74, 120), (_T + 74, 120)],                                   # 투구 챙
-         _arc(_T, 62, 14, 26, 180, 360, 10),                                 # 투구 꼭대기 술
-         [(_T + 183, 182), (_T + 183, 292)], [(_T + 146, 222), (_T + 220, 222)],  # 방패 십자
-         [(_T - 62, 252), (_T + 62, 252)])},                                 # 허리띠
-    {'id': 'melee', 'name': '근접 딜러', 'stat': '공격력', 'look': '칼을 치켜든 꼬마 검사', 'gear': ('weapon', 'guard'),
-     'parts': (
-         ('leg_l', 'e', _M - 26, 332, 20, 34), ('leg_r', 'e', _M + 26, 332, 20, 34),
-         ('body', 'p', [(_M - 46, 180), (_M + 46, 180), (_M + 56, 302), (_M - 56, 302)]),
-         ('arm_l', 'e', _M - 66, 236, 18, 40), ('arm_r', 'e', _M + 66, 236, 18, 40),
-         ('weapon', 'p', _bar((_M + 132, 262), (_M + 202, 82), 24)),        # 칼날 + 손잡이
-         ('guard', 'p', _bar((_M + 118, 213), (_M + 174, 235), 16)),        # 날밑
-         ('head', 'e', _M, 132, 64, 58),
-         ('hair', 'p', _spiky(_M, 132, 66, 84, 195, 345, 5))),
-     'details': _face(_M, 140) + (
-         [(_M + 191, 78), (_M + 210, 60), (_M + 213, 86)],                   # 칼끝
-         [(_M - 50, 252), (_M + 50, 252)])},                                 # 허리띠
-    {'id': 'ranged', 'name': '원거리 딜러', 'stat': '공격력', 'look': '활을 든 꼬마 궁수', 'gear': ('weapon',),
-     'parts': (
-         ('leg_l', 'e', _R - 26, 332, 20, 34), ('leg_r', 'e', _R + 26, 332, 20, 34),
-         ('body', 'p', [(_R - 46, 180), (_R + 46, 180), (_R + 56, 302), (_R - 56, 302)]),
-         ('arm_l', 'e', _R - 66, 236, 18, 40),
-         ('arm_r', 'e', _R + 80, 214, 34, 14),                              # 활 쪽으로 뻗은 팔
-         ('weapon', 'p', _arc(_R + 112, 214, 64, 132, -76, 76, 18) + _arc(_R + 112, 214, 48, 122, 76, -76, 18)),
-         ('head', 'e', _R, 132, 64, 58),
-         ('hat', 'p', [(_R - 72, 116), (_R + 72, 116), (_R + 30, 62), (_R - 20, 46)])),
-     'details': _face(_R, 144) + (
-         [(_R + 128, 88), (_R + 128, 340)],                                  # 활시위
-         [(_R + 136, 214), (_R + 214, 214)], [(_R + 202, 204), (_R + 218, 214), (_R + 202, 224)],  # 화살
-         [(_R + 40, 70), (_R + 86, 36), (_R + 70, 64)],                      # 모자 깃털
-         [(_R - 50, 252), (_R + 50, 252)])},
-    {'id': 'support', 'name': '서포터', 'stat': '버프량', 'look': '별 지팡이를 든 꼬마 마법사', 'gear': ('weapon', 'star'),
-     'parts': (
-         ('leg_l', 'e', _S - 26, 350, 20, 22), ('leg_r', 'e', _S + 26, 350, 20, 22),
-         ('body', 'p', [(_S - 46, 196), (_S + 46, 196), (_S + 80, 342), (_S - 80, 342)]),
-         ('arm_l', 'e', _S - 70, 252, 18, 34), ('arm_r', 'e', _S + 70, 252, 18, 34),
-         ('weapon', 'p', _bar((_S + 136, 354), (_S + 152, 136), 13)),       # 지팡이 막대
-         ('star', 'p', _star(_S + 154, 104, 34, 15)),
-         ('head', 'e', _S, 152, 62, 56),
-         ('hat_brim', 'e', _S, 106, 96, 16),
-         ('hat', 'p', [(_S - 58, 106), (_S + 58, 106), (_S + 34, 50), (_S + 4, 12), (_S - 22, 40)])),
-     'details': _face(_S, 162, cheeks=True) + (
-         _star(_S + 6, 72, 12, 5) + [_star(_S + 6, 72, 12, 5)[0]],           # 모자 별
-         [(_S - 60, 296), (_S + 60, 296)])},                                 # 옷자락 무늬
+# ---------------------------------------------------------------- 무기 (무기 종이 좌표)
+_d = (66 / math.hypot(66, 204), -204 / math.hypot(66, 204))   # 칼: 손잡이 → 칼끝 방향
+_p = (-_d[1], _d[0])
+_HILT, _END = (WX - 33, 300), (WX + 33, 96)
+_gc = (_HILT[0] + _d[0] * 40, _HILT[1] + _d[1] * 40)            # 날밑 가운데
+_BOW_X = WX - 60                                               # 활 호의 가운데 (활은 그 오른쪽에 걸친다)
+_ARROW_X = WX + 34
+
+ROLES = (
+    {'id': 'tank', 'name': '탱커', 'stat': '체력', 'look': '큰 방패를 든 꼬마 기사',
+     'deco': (('helmet', 'p', _arc(X, 132, 72, 68, 180, 360, 18) + [(X + 72, 118), (X - 72, 118)]),),
+     'deco_details': ([(X - 72, 120), (X + 72, 120)], _arc(X, 64, 14, 26, 180, 360, 10)),   # 투구 챙, 꼭대기 술
+     'gear': ({'parts': (('shield', 'p', [(WX - 57, 168), (WX + 57, 168), (WX + 57, 252), (WX, 326),
+                                          (WX - 57, 252)]),),
+               'details': ([(WX, 188), (WX, 300)], [(WX - 37, 226), (WX + 37, 226)]),       # 방패 십자
+               'pivot': (WX - 57, 236), 'to': (X + 80, 240), 'angle': 0.0},)},
+    {'id': 'melee', 'name': '근접 딜러', 'stat': '공격력', 'look': '칼을 든 꼬마 검사',
+     'deco': (('hair', 'p', _spiky(X, 132, 66, 84, 195, 345, 5)),),
+     'deco_details': (),
+     'gear': ({'parts': (('blade', 'p', _bar(_HILT, _END, 22)),
+                         ('guard', 'p', _bar((_gc[0] - _p[0] * 28, _gc[1] - _p[1] * 28),
+                                             (_gc[0] + _p[0] * 28, _gc[1] + _p[1] * 28), 15))),
+               'details': ([(_END[0] - _p[0] * 11, _END[1] - _p[1] * 11), (_END[0] + _d[0] * 20, _END[1] + _d[1] * 20),
+                            (_END[0] + _p[0] * 11, _END[1] + _p[1] * 11)],),          # 칼끝
+               'pivot': (_HILT[0] + _d[0] * 18, _HILT[1] + _d[1] * 18), 'to': (X + 76, 270), 'angle': 0.0},)},
+    {'id': 'ranged', 'name': '원거리 딜러', 'stat': '공격력', 'look': '활과 화살을 든 꼬마 궁수',
+     'deco': (('hat', 'p', [(X - 72, 116), (X + 72, 116), (X + 30, 62), (X - 20, 46)]),),
+     'deco_details': ([(X + 40, 70), (X + 86, 36), (X + 70, 64)],),                  # 모자 깃털
+     'gear': ({'parts': (('bow', 'p', _arc(_BOW_X, 214, 56, 120, -76, 76, 18) +
+                          _arc(_BOW_X, 214, 42, 110, 76, -76, 18)),),
+               'details': ([(_BOW_X + 14, 98), (_BOW_X + 14, 330)],),                    # 활시위
+               'pivot': (_BOW_X + 49, 214), 'to': (X + 94, 250), 'angle': 0.0},
+              # 화살은 옆으로 눕혀(시계 방향 90도) 활시위에 메긴다
+              {'parts': (('arrow', 'p', _bar((_ARROW_X, 318), (_ARROW_X, 128), 8)),
+                         ('arrow_tip', 'p', [(_ARROW_X - 11, 132), (_ARROW_X, 104), (_ARROW_X + 11, 132)])),
+               'details': ([(_ARROW_X - 9, 314), (_ARROW_X, 302), (_ARROW_X + 9, 314)],),   # 화살 깃
+               'pivot': (_ARROW_X, 217), 'to': (X + 164, 250), 'angle': -math.pi / 2})},
+    {'id': 'support', 'name': '서포터', 'stat': '버프량', 'look': '별 지팡이를 든 꼬마 마법사',
+     'deco': (('hat_brim', 'e', X, 86, 92, 15),
+              ('hat', 'p', [(X - 54, 86), (X + 54, 86), (X + 30, 46), (X + 4, 16), (X - 20, 40)])),
+     'deco_details': (_star(X + 6, 58, 11, 5) + [_star(X + 6, 58, 11, 5)[0]],),      # 모자 별
+     'cheeks': True,
+     'gear': ({'parts': (('staff', 'p', _bar((WX - 7, 352), (WX + 7, 142), 13)),
+                         ('star', 'p', _star(WX + 9, 110, 32, 14))),
+               'details': (),
+               'pivot': (WX, 262), 'to': (X + 88, 262), 'angle': 0.0},)},
 )
-IDS = tuple(f['id'] for f in FRAMES)
+IDS = tuple(r['id'] for r in ROLES)
+FRAMES = ROLES   # 역할 목록 (이름·능력치 설명용)
 
 
-def get(frame_id):
-    for f in FRAMES:
-        if f['id'] == frame_id:
-            return f
+# ---------------------------------------------------------------- 체형 맞추기
+def _scaler(body):
+    sx, sy = BODY_SCALE[body]
+    return lambda p: (X + (p[0] - X) * sx, FOOT + (p[1] - FOOT) * sy)
+
+
+def _scale_part(part, f, sx, sy):
+    if part[1] == 'e':
+        name, _, cx, cy, rx, ry = part
+        x, y = f((cx, cy))
+        return (name, 'e', x, y, rx * sx, ry * sy)
+    return (part[0], 'p', [f(q) for q in part[2]])
+
+
+def _map_detail(d, f, k=1.0):
+    if d[0] == 'dot':
+        x, y = f((d[1], d[2]))
+        return ('dot', x, y, d[3] * k)
+    return [f(q) for q in d]
+
+
+_built = {}
+
+
+def role(frame_id):
+    for r in ROLES:
+        if r['id'] == frame_id:
+            return r
     raise KeyError(frame_id)
 
 
-def part_names(frame_id):
-    return [p[0] for p in get(frame_id)['parts']]
+def get(frame_id, body='medium'):
+    """역할 + 체형 틀: {'id', 'name', 'stat', 'look', 'body', 'parts', 'details'(사람 종이), 'gear'(무기 묶음)}."""
+    body = body if body in BODIES else 'medium'
+    key = (frame_id, body)
+    if key in _built:
+        return _built[key]
+    r = role(frame_id)
+    sx, sy = BODY_SCALE[body]
+    f = _scaler(body)
+    parts = [_scale_part(p, f, sx, sy) for p in _BODY + (_HEAD,) + r['deco']]
+    details = [_map_detail(d, f, min(sx, sy))
+               for d in _face(X, 146, r.get('cheeks', False)) + tuple(r['deco_details']) + (_BELT,)]
+    gear = tuple({'parts': g['parts'], 'details': g['details'], 'pivot': g['pivot'], 'to': f(g['to']),
+                  'angle': g['angle']} for g in r['gear'])
+    _built[key] = {'id': frame_id, 'name': r['name'], 'stat': r['stat'], 'look': r['look'], 'body': body,
+                   'parts': tuple(parts), 'details': tuple(details), 'gear': gear}
+    return _built[key]
+
+
+def part_names(frame_id, body='medium'):
+    """사람 종이 부위 이름들."""
+    return [p[0] for p in get(frame_id, body)['parts']]
+
+
+def gear_groups(frame_id):
+    """무기 묶음들. 묶음마다 따로 떼어 움직인다 (활과 화살처럼)."""
+    return list(get(frame_id)['gear'])
+
+
+def gear_names(frame_id):
+    return [p[0] for g in gear_groups(frame_id) for p in g['parts']]
 
 
 def outline(part, n=72):
@@ -143,16 +207,68 @@ def outline(part, n=72):
     return pts + [pts[0]]
 
 
-def gear_names(frame_id):
-    """몸에서 떨어져 있는 무기·방패 부위 이름들."""
-    return list(get(frame_id)['gear'])
-
-
-def part_mask(frame_id, size=(PAPER_W, PAPER_H)):
-    """(h, w) uint8: 0 = 틀 밖, i = part_names()[i - 1]."""
+def _mask(parts, size):
     img = Image.new('L', size, 0)
     d = ImageDraw.Draw(img)
-    sx, sy = size[0] / PAPER_W, size[1] / PAPER_H
-    for i, part in enumerate(get(frame_id)['parts'], 1):
-        d.polygon([(x * sx, y * sy) for x, y in outline(part)], fill=i)
+    for i, part in enumerate(parts, 1):
+        d.polygon(outline(part), fill=i)
     return np.asarray(img)
+
+
+def part_mask(frame_id, body='medium'):
+    """사람 종이 (h, w) uint8: 0 = 틀 밖, i = part_names()[i - 1]."""
+    return _mask(get(frame_id, body)['parts'], (PERSON_W, PAPER_H))
+
+
+def gear_mask(frame_id):
+    """무기 종이 (h, w) uint8: 0 = 밖, i = 묶음 번호 + 1."""
+    out = np.zeros((PAPER_H, GEAR_W), np.uint8)
+    for i, g in enumerate(gear_groups(frame_id), 1):
+        out[_mask(g['parts'], (GEAR_W, PAPER_H)) > 0] = i
+    return out
+
+
+def fit(rgba, w, h=PAPER_H):
+    """그림 배열을 w x h 로 (크기가 다르면 가운데 맞춤으로 자르거나 빈 칸을 붙인다)."""
+    sh, sw = rgba.shape[:2]
+    out = np.zeros((h, w, 4), dtype=np.uint8)
+    ox, oy = (w - sw) // 2, (h - sh) // 2
+    sx, sy, dx, dy = max(0, -ox), max(0, -oy), max(0, ox), max(0, oy)
+    cw, ch = min(sw - sx, w - dx), min(sh - sy, h - dy)
+    out[dy:dy + ch, dx:dx + cw] = rgba[sy:sy + ch, sx:sx + cw]
+    return out
+
+
+def split_gear(rgba, frame_id):
+    """무기 종이 그림을 묶음마다 한 장씩으로. 칠한 픽셀은 가장 가까운 묶음으로 간다 (밑그림 밖 선도)."""
+    groups = gear_groups(frame_id)
+    rgba = fit(rgba, GEAR_W)
+    if len(groups) == 1:
+        return [rgba]
+    m = gear_mask(frame_id)
+    ys, xs = np.mgrid[0:PAPER_H, 0:GEAR_W]
+    # 묶음 윤곽 점까지의 가장 가까운 거리 (안쪽 픽셀은 거리 0)
+    dist = []
+    for i, g in enumerate(groups, 1):
+        d = np.full((PAPER_H, GEAR_W), np.inf)
+        for part in g['parts']:
+            for a, b in outline(part, 48):
+                d = np.minimum(d, (xs - a) ** 2 + (ys - b) ** 2)
+        d[m == i] = 0
+        dist.append(d)
+    owner = np.argmin(np.stack(dist), axis=0)
+    out = []
+    for i in range(len(groups)):
+        piece = rgba.copy()
+        piece[owner != i, 3] = 0
+        out.append(piece)
+    return out
+
+
+def held(frame_id, group, p, body='medium'):
+    """무기 종이 점 p 를, 그 무기 묶음을 손에 쥐었을 때의 사람 종이 위 자리로 (pivot → to, angle 만큼 돌림).
+    angle 은 화면에서 반시계가 + (종이 좌표는 y 가 아래로 커서 식을 그에 맞췄다)."""
+    g = get(frame_id, body)['gear'][group]
+    dx, dy = p[0] - g['pivot'][0], p[1] - g['pivot'][1]
+    c, s = math.cos(g['angle']), math.sin(g['angle'])
+    return g['to'][0] + dx * c + dy * s, g['to'][1] - dx * s + dy * c
