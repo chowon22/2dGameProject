@@ -5,6 +5,8 @@
 - card / card_on / card_empty: 프리셋(내가 그린 유닛) 카드
 - frame_<id> / frame_<id>_on: 틀 고르기 카드 (틀 실루엣 + 이름)
 - ink_ring: 고른 잉크 아래 동그라미, eraser: 지우개
+- tab_<all|틀 id> / _on: 내 유닛 화면의 프리셋 나누기 칸 (전체·탱커·근접 딜러·원거리 딜러·서포터)
+- card_del / card_del_confirm: 프리셋 카드 모서리의 지우기 × (한 번 누르면 붉게 → 한 번 더 누르면 지움)
 - button_save / button_clear / button_close / button_unequip (+ _hover)
 
 실행: python tools/gen_draw.py
@@ -100,6 +102,36 @@ def frame_card(frame, on):
     return img
 
 
+TAB = (138, 58)
+TABS = (('all', '전체', 'lemon'), ('tank', '탱커', 'sky'), ('melee', '근접 딜러', 'pink'),
+        ('ranged', '원거리 딜러', 'peach'), ('support', '서포터', 'mint'))
+
+
+def tab(i, label, tint, on):
+    w, h = TAB
+    img = note(w, h, 1000 + i * 2 + on, ((w / 2, h / 2, w / 2, h / 2, PASTEL[tint], 170 if on else 45),),
+               fill_alpha=250 if on else 170, line=3.8 if on else 2.6, r=16)
+    sh = Sheet(w, h, seed=0, ss=1)
+    sh.img = img
+    sh.ink_text(label, ImageFont.truetype(os.path.join(pastel.FONTS, pastel.HAND), 24), w / 2, h / 2, PLUM,
+                alpha=255 if on else 170, anchor='mm')
+    return img
+
+
+def card_del(confirm):
+    sh = Sheet(34, 34, seed=990 + confirm)
+    sh.line = PLUM
+    ring = ellipse_points(17, 17, 13, 13)
+    sh.fill_poly(ring, (238, 118, 128) if confirm else (255, 251, 246))
+    if not confirm:
+        sh.wash(17, 17, 10, 10, PASTEL['pink'], alpha=120, layers=2, blur=2)
+    sh.stroke(ring, 2.6, amp=0.4)
+    x_col = WHITE if confirm else PLUM
+    sh.stroke([(11, 11), (23, 23)], 3.0, color=x_col, amp=0.3)
+    sh.stroke([(23, 11), (11, 23)], 3.0, color=x_col, amp=0.3)
+    return sh.result()
+
+
 def ink_ring():
     sh = Sheet(84, 40, seed=950)
     sh.line = PLUM
@@ -135,6 +167,11 @@ def main():
     for f in frames.FRAMES:
         for on in (False, True):
             save(frame_card(f, on), f'frame_{f["id"]}{"_on" if on else ""}.png')
+    for i, (tid, label, tint) in enumerate(TABS):
+        for on in (False, True):
+            save(tab(i, label, tint, on), f'tab_{tid}{"_on" if on else ""}.png')
+    save(card_del(False), 'card_del.png')
+    save(card_del(True), 'card_del_confirm.png')
     save(ink_ring(), 'ink_ring.png')
     save(eraser(), 'eraser.png')
     for i, (name, label, tint, size) in enumerate(BUTTONS):
