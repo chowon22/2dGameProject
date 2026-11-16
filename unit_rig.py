@@ -18,7 +18,7 @@ _cache = {}
 
 
 class Rig:
-    def __init__(self, unit, person, gear, max_w, max_h):
+    def __init__(self, unit, person, gear, scale):
         self.pieces = unit_art.pieces(unit, gear)
         pb = unit_art.bbox(person)
         boxes = [pb] if pb else []
@@ -32,7 +32,7 @@ class Rig:
         ux0, uy0 = min(b[0] for b in boxes), min(b[1] for b in boxes)
         ux1, uy1 = max(b[2] for b in boxes), max(b[3] for b in boxes)
         # 발(사람 그림 맨 아래 가운데)을 기준으로 맞춘다
-        self.k = min(max_w / (ux1 - ux0), max_h / (uy1 - uy0), 1.0)
+        self.k = scale
         self.fx = (pb[0] + pb[2]) / 2 if pb else (ux0 + ux1) / 2
         self.fy = pb[3] if pb else uy1
         self.w, self.h = (ux1 - ux0) * self.k, (uy1 - uy0) * self.k
@@ -75,14 +75,15 @@ def _draw(img, x, y, rad, alpha):
         img.opacify(1)
 
 
-def rig(unit, max_w, max_h):
+def rig(unit, scale):
     """유닛의 Rig (그림 파일이 바뀌면 새로 만든다). 그림이 없으면 None."""
     slot = save_data.current['slot']
-    stamp = tuple(_mtime(p) for p in (save_data.unit_path(slot, unit['id']), save_data.gear_path(slot, unit['id'])))
-    key = (slot, unit['id'], stamp, unit.get('frame'), unit.get('body'), max_w, max_h)
+    paths = [save_data.unit_path(slot, unit['id'])] + [save_data.gear_path(slot, unit['id'], group=i) for i in range(4)]
+    stamp = tuple(_mtime(p) for p in paths)
+    key = (slot, unit['id'], stamp, unit.get('frame'), unit.get('body'), scale)
     if key not in _cache:
         try:
-            _cache[key] = Rig(unit, *unit_art.load(slot, unit), max_w, max_h)
+            _cache[key] = Rig(unit, *unit_art.load(slot, unit), scale)
         except ValueError:
             _cache[key] = None
     return _cache[key]

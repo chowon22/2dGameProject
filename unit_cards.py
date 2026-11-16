@@ -24,22 +24,22 @@ DEL_DX, DEL_DY, DEL_R = 48, 38, 16   # 지우기 × 자리 (카드 가운데에�
 _thumbs = {}                    # (슬롯, 유닛 id, 크기) → 썸네일 (없으면 None)
 
 
-def make_thumb(unit, max_w=THUMB_W, max_h=THUMB_H):
+def make_thumb(unit, max_w=THUMB_W, max_h=THUMB_H, scale=None):
     """무기를 손에 쥔 그림을 max_w x max_h 안에 맞게 줄인 것."""
     arr = unit_art.compose(unit, *unit_art.load(save_data.current['slot'], unit))
     if arr is None:
         return None
     img = PILImage.fromarray(arr, 'RGBA')
-    k = min(max_w / img.width, max_h / img.height, 1.0)
+    k = scale if scale else min(max_w / img.width, max_h / img.height, 1.0)   # scale: 체형 크기 차이가 보이게 같은 배율로
     img = img.resize((max(1, round(img.width * k)), max(1, round(img.height * k))), PILImage.LANCZOS)
     return LiveImage(img.width, img.height, np.asarray(img))
 
 
-def thumb(unit, size=(THUMB_W, THUMB_H)):
+def thumb(unit, size=(THUMB_W, THUMB_H), scale=None):
     """카드 썸네일. size 를 바꾸면 필드 미리보기용처럼 다른 크기로 (크기마다 따로 만들어 둔다)."""
-    key = (save_data.current['slot'], unit['id'], size)
+    key = (save_data.current['slot'], unit['id'], size, scale)
     if key not in _thumbs:
-        _thumbs[key] = make_thumb(unit, *size)
+        _thumbs[key] = make_thumb(unit, *size, scale=scale)
     return _thumbs[key]
 
 

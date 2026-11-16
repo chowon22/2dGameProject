@@ -12,7 +12,7 @@ import unit_rig
 FRONT_GAP, BACK_GAP = 140, 270      # 소년 x 에서 앞줄·뒷줄까지 (왼쪽으로)
 LANE_DY = (16, 0, -16)              # 줄(먼 쪽 → 가까운 쪽)마다 발 높이
 LANE_DX = (34, 0, -34)
-FIGURE = (100, 88)                  # 서 있는 그림 최대 크기
+SCALE = 0.25                        # 걷는 그림 배율 (체형마다 크기가 다르게 보이도록 모두 같은 배율)
 STEP = 6.5                          # 걸음 박자 (라디안/초)
 SWAY = {'tank': 0.06, 'melee': 0.22, 'ranged': 0.08, 'support': 0.14}   # 무기 흔드는 폭 (라디안)
 
@@ -32,7 +32,7 @@ def draw(t, boy_x, ground, shadow=None):
     for slot in sorted(range(save_data.PARTY_MAX), key=lambda s: s % 3):
         unit_id = data['party'][slot]
         unit = save_data.find_unit(data, unit_id) if unit_id is not None else None
-        r = unit_rig.rig(unit, *FIGURE) if unit else None
+        r = unit_rig.rig(unit, SCALE) if unit else None
         if not r:
             continue
         x, y = slot_pos(slot, boy_x, ground)
