@@ -2,15 +2,17 @@
 
 - 내 유닛 (위): 데리고 갈 유닛 6자리. 누르면 빠진다
 - 잉크: 색마다 '고른 유닛에 드는 잉크 / 가진 잉크'
-- 내 프리셋 (아래): 그려서 저장한 유닛 전부. 누르면 내 유닛에 들어간다.
-  가진 잉크 안에서만 고를 수 있고, 지금 더 고를 수 없는 카드는 흐리게 보인다.
-  같은 프리셋을 여러 번 고를 수 있다. 많으면 마우스 휠로 넘긴다
+- 내 프리셋 (아래): 그려서 저장한 유닛. 전체 / 탱커 / 근접 딜러 / 원거리 딜러 / 서포터 칸으로 나눠 본다.
+  누르면 내 유닛에 들어간다. 가진 잉크 안에서만 고를 수 있고, 지금 더 고를 수 없는 카드는 흐리게 보인다.
+  같은 프리셋을 여러 번 고를 수 있다. 많으면 마우스 휠로 넘긴다.
+  카드에 마우스를 올리면 × 가 뜨고, 두 번 누르면 그 프리셋을 지운다
 - 다 빼기 / 닫기, ESC 닫기
 """
 from pico2d import (clear_canvas, update_canvas, get_events,
                     SDL_QUIT, SDL_KEYDOWN, SDL_MOUSEMOTION, SDL_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT, SDLK_ESCAPE)
 from sdl2 import SDL_MOUSEWHEEL
 
+import frames
 import game_framework
 import painter
 import prepare_mode
@@ -32,12 +34,16 @@ PARTY_Y, INK_Y, LIST_Y = 640, 540, 462
 ROW_X = 220
 GAP = 124
 COLS = 7
-GRID_Y = (384, 276, 168)         # 프리셋 줄마다 y
+GRID_Y = (378, 270, 162)         # 프리셋 줄마다 y
+TABS = ('all',) + frames.IDS     # 프리셋 나누기 칸
+TAB_GAP = 148
 
 panel = fade = toast_img = None
 ink_icons = {}
 buttons = []
 row0 = 0                         # 휠로 넘긴 줄 수
+tab = 'all'
+deleter = None
 toast = None
 t = 0.0
 
@@ -50,8 +56,14 @@ def data():
     return save_data.current
 
 
+def tab_x(i):
+    return ROW_X + 69 + TAB_GAP * i
+
+
 def presets():
-    return data()['units'] if data() else []
+    """지금 칸(전체 또는 틀 하나)의 프리셋."""
+    units = data()['units'] if data() else []
+    return units if tab == 'all' else [u for u in units if u.get('frame') == tab]
 
 
 def visible():
@@ -80,6 +92,12 @@ def pick(unit):
         say('잉크가 모자라요')
 
 
+def pick_tab(name):
+    global tab, row0
+    tab = name
+    row0 = 0
+
+
 def unequip_all():
     if data():
         data()['party'].clear()
@@ -91,7 +109,7 @@ def close():
 
 # ---------------------------------------------------------------- 모드
 def init():
-    global panel, fade, toast_img, ink_icons, buttons, row0, toast, t
+    global panel, fade, toast_img, ink_icons, buttons, row0, tab, deleter, toast, t
     panel = image('draw', 'panel.png')
     fade = image('common', 'fade.png')
     toast_img = image('prepare', 'toast.png')
@@ -101,6 +119,8 @@ def init():
     if data():   # 지워진 프리셋이 남아 있으면 정리
         data()['party'] = [u['id'] for u in save_data.party_units(data())]
     row0 = 0
+    tab = 'all'
+    deleter = unit_cards.Deleter()
     toast = None
     t = 0.0
     title_mode.move_mouse(title_mode.mouse)
@@ -119,8 +139,21 @@ def resume():
 
 
 def click(mx, my):
+    global row0
     if any(b.click(mx, my) for b in buttons) or not data():
         return
+    gone = deleter.click(visible(), mx, my)
+    if gone == 'asked':
+        say('한 번 더 누르면 이 프리셋을 지워요')
+        return
+    if gone is not None:
+        row0 = min(row0, max_row0())
+        say('프리셋을 지웠어요')
+        return
+    for i, name in enumerate(TABS):
+        if abs(mx - tab_x(i)) <= 62 and abs(my - LIST_Y) <= 24:
+            pick_tab(name)
+            return
     for i in range(len(save_data.party_units(data()))):
         if unit_cards.hit(slot_x(i), PARTY_Y, mx, my):
             save_data.remove_from_party(data(), i)
@@ -142,6 +175,7 @@ def handle_events():
         elif event.type == SDL_MOUSEMOTION:
             pos = title_mode.to_canvas(event)
             title_mode.move_mouse(pos)
+            deleter.move(visible(), *pos)
             for b in buttons:
                 b.mouse_move(*pos)
         elif event.type == SDL_MOUSEBUTTONDOWN and event.button == SDL_BUTTON_LEFT:
@@ -192,20 +226,25 @@ def draw_ink():
 
 def draw_presets():
     text.draw('내 프리셋', 46, LIST_Y, 30, INK)
-    if not presets():
-        text.draw('아직 그린 유닛이 없어요.  유닛 추가하기에서 그려 보세요!', ROW_X, LIST_Y, 24, SOFT)
+    for i, name in enumerate(TABS):
+        image('draw', f'tab_{name}{"_on" if name == tab else ""}.png').draw(tab_x(i), LIST_Y)
+    if not data() or not data()['units']:
+        text.draw('아직 그린 유닛이 없어요.  유닛 추가하기에서 그려 보세요!', ROW_X, GRID_Y[0], 24, SOFT)
         return
-    hint = '누르면 내 유닛에 들어가요  ·  내 유닛을 누르면 빠져요'
+    if not presets():
+        text.draw('이 칸에는 아직 그린 유닛이 없어요', ROW_X, GRID_Y[0], 24, SOFT)
+    hint = '누르면 내 유닛에 들어가요  ·  내 유닛을 누르면 빠져요  ·  × 를 두 번 누르면 지워요'
     if max_row0():
         hint += f'  ·  휠로 더 보기 ({row0 + 1}/{max_row0() + 1})'
-    text.draw(hint, ROW_X, LIST_Y, 22, SOFT)
+    text.draw(hint, 46, 70, 22, SOFT)
     picked = set(data()['party'])
     for unit, x, y in visible():
         ok = save_data.can_add(data(), unit)
-        unit_cards.draw(unit, x, y, on=unit['id'] in picked, alpha=1.0 if ok else 0.38)
+        unit_cards.draw(unit, x, y, on=unit['id'] in picked, alpha=1.0 if ok else 0.38,
+                        delete=deleter.state(unit))
         n = data()['party'].count(unit['id'])
         if n > 1:
-            text.draw(f'×{n}', x + 36, y + 30, 18, INK)
+            text.draw(f'×{n}', x + 44, y - 28, 16, INK, 'c')
 
 
 def draw_toast():
