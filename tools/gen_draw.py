@@ -163,12 +163,12 @@ def frame_card(frame, on):
     # 왼쪽에 작은 틀 실루엣
     g = guide(frame, alpha=255, width=6.0, fill_alpha=80 if on else 50, color=PLUM)
     g = g.crop(g.getbbox())
-    k = min(76 / g.width, 62 / g.height)
+    k = min(62 / g.width, 64 / g.height)   # 아이콘 칸 62px, 나머지는 이름 칸
     icon = g.resize((round(g.width * k), round(g.height * k)), Image.LANCZOS)
-    img.alpha_composite(icon, (14 + (76 - icon.width) // 2, (h - icon.height) // 2))
+    img.alpha_composite(icon, (16 + (62 - icon.width) // 2, (h - icon.height) // 2))
     sh = Sheet(w, h, seed=0, ss=1)
     sh.img = img
-    sh.ink_text(frame['name'], ImageFont.truetype(os.path.join(pastel.FONTS, pastel.HAND), 24), 150, h / 2,
+    sh.ink_text(frame['name'], ImageFont.truetype(os.path.join(pastel.FONTS, pastel.HAND), 22), 136, h / 2,
                 PLUM, anchor='mm')
     return img
 
