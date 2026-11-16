@@ -8,6 +8,7 @@ pico2d 와 무관한 순수 로직이라 따로 테스트할 수 있다 (tests/t
 - delete(slot): 지우기 (그 슬롯의 유닛 그림도 함께)
 - add_unit(data, frame, counts, ink_used): 그린 유닛을 프리셋으로 적는다 (드는 잉크만 기록, 가진 잉크는 그대로). 그림은 unit_path() 에 저장
 - delete_unit(data, id): 프리셋 지우기 (그림 파일도, 내 유닛에 고른 것도 함께)
+- party_hp: 자리마다 남은 체력 비율. 전투에서 다친 상태가 이어지고, 치료(heal)해야 다시 찬다
 - party: 내 유닛 화면에서 필드 자리(6칸: 앞줄 3 + 뒷줄 3)마다 놓은 프리셋 id. 같은 프리셋을 여러 번 놓을 수 있다.
   드는 잉크 합이 가진 잉크를 넘지 않게 can_place() 로 막는다
 """
@@ -21,7 +22,7 @@ DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'saves')
 SLOTS = 3
 VERSION = 1
 PARTY_MAX = 6   # 필드에 놓는 자리 수: 0~2 앞줄(위·가운데·아래), 3~5 뒷줄
-START_INK = 300  # 처음 검정 잉크 양 (PRD 2.6: 처음엔 검정뿐) — 수치는 미정 사항, 나중에 조정
+START_INK = 600  # 처음 검정 잉크 양 (PRD 2.6: 처음엔 검정뿐). 유닛 하나에 보통 150~280 → 처음에 둘쯤 놓을 수 있게
 
 current = None        # 지금 하고 있는 세이브 (dict)
 _session_start = None  # 플레이 시간을 재기 시작한 시각
@@ -50,6 +51,7 @@ def blank(slot, now=None):
         'ink': {'black': START_INK, 'red': 0, 'green': 0, 'blue': 0},
         'units': [],          # 그린 유닛 (프리셋): {'id', 'frame', 'body', 'counts', 'ink'} — 그림은 unit_path·gear_path
         'party': [None] * PARTY_MAX,  # 내 유닛: 필드 자리마다 놓은 프리셋 id (빈 자리 None, 같은 id 여러 번 가능)
+        'party_hp': [1.0] * PARTY_MAX,  # 자리마다 남은 체력 비율 (1 가득 ~ 0 쓰러짐). 전투가 끝나도 이어지고 치료해야 찬다
         'cleared': [],        # 깬 스테이지 ('0-1' …)
     }
 
@@ -72,6 +74,9 @@ def load(slot, folder=None):
     full.update({k: v for k, v in data.items() if k in full})
     full['slot'] = slot
     full['party'] = normalize_party(full['party'], full['units'])
+    hp = full.get('party_hp') if isinstance(full.get('party_hp'), list) else []
+    full['party_hp'] = [min(1.0, max(0.0, float(h))) if isinstance(h, (int, float)) else 1.0
+                        for h in (hp + [1.0] * PARTY_MAX)[:PARTY_MAX]]
     return full
 
 
@@ -137,7 +142,9 @@ def delete_unit(data, unit_id, folder=None):
     if not find_unit(data, unit_id):
         return False
     data['units'] = [u for u in data['units'] if u['id'] != unit_id]
-    data['party'] = [None if i == unit_id else i for i in data['party']]
+    for slot, i in enumerate(data['party']):
+        if i == unit_id:
+            remove_from_party(data, slot)
     paths = [unit_path(data['slot'], unit_id, folder)] + glob.glob(
         os.path.join(units_dir(data['slot'], folder), f'unit_{unit_id}_gear*.png'))
     for path in paths:
@@ -211,6 +218,7 @@ def place(data, slot, unit_id):
     if not unit or not 0 <= slot < PARTY_MAX or not can_place(data, unit, slot):
         return False
     data['party'][slot] = unit_id
+    hp_list(data)[slot] = 1.0   # 새로 놓은 유닛은 가득
     return True
 
 
@@ -221,18 +229,44 @@ def add_to_party(data, unit_id):
         return None
     slot = data['party'].index(None)
     data['party'][slot] = unit_id
+    hp_list(data)[slot] = 1.0
     return slot
 
 
 def remove_from_party(data, slot):
+    """자리에서 뺀다 (잉크는 돌아오고, 다친 상태는 사라진다)."""
     if 0 <= slot < PARTY_MAX:
         data['party'][slot] = None
+        hp_list(data)[slot] = 1.0
 
 
 def swap_slots(data, a, b):
-    """두 자리를 맞바꾼다 (한쪽이 비었으면 옮기기)."""
-    p = data['party']
+    """두 자리를 맞바꾼다 (한쪽이 비었으면 옮기기). 남은 체력도 함께 옮겨 간다."""
+    p, h = data['party'], hp_list(data)
     p[a], p[b] = p[b], p[a]
+    h[a], h[b] = h[b], h[a]
+
+
+def hp_list(data):
+    """자리마다 남은 체력 비율 목록 (예전 세이브면 만들어 둔다)."""
+    if not isinstance(data.get('party_hp'), list) or len(data['party_hp']) != PARTY_MAX:
+        data['party_hp'] = [1.0] * PARTY_MAX
+    return data['party_hp']
+
+
+def hurt_slots(data):
+    """다친(체력이 가득이 아닌) 유닛이 놓인 자리들."""
+    return [s for s, uid in enumerate(data['party']) if uid is not None and hp_list(data)[s] < 1.0]
+
+
+def heal(data, slots, cost):
+    """slots 자리 유닛을 가득 치료하고 검정 잉크 cost 를 쓴다 (가진 잉크에서 정말로 빠진다). 모자라면 False."""
+    if ink_left(data).get('black', 0) < cost:
+        return False
+    data['ink']['black'] -= cost
+    for s in slots:
+        hp_list(data)[s] = 1.0
+    return True
 
 
 # ---------------------------------------------------------------- 지금 하고 있는 세이브

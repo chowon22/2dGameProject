@@ -225,16 +225,17 @@ class UnitSaveTest(unittest.TestCase):
 
     def test_party_slots_within_ink(self):
         data = save_data.new_game(1, self.dir, now=0.0)          # 검정 START_INK
-        big = save_data.add_unit(data, 'tank', {}, {'black': 200}, self.dir)
+        big_ink = save_data.START_INK * 2 // 3                         # 두 개는 못 놓는 크기
+        big = save_data.add_unit(data, 'tank', {}, {'black': big_ink}, self.dir)
         small = save_data.add_unit(data, 'melee', {}, {'black': 60}, self.dir)
         red = save_data.add_unit(data, 'ranged', {}, {'red': 5}, self.dir)
         self.assertEqual(save_data.add_to_party(data, big['id']), 0)    # 앞자리부터
-        self.assertIsNone(save_data.add_to_party(data, big['id']))       # 400 > 300
+        self.assertIsNone(save_data.add_to_party(data, big['id']))       # 가진 잉크를 넘는다
         self.assertTrue(save_data.place(data, 4, small['id']))           # 고른 자리에
         self.assertFalse(save_data.place(data, 2, red['id']))            # 빨강은 없다
         self.assertEqual(data['party'], [big['id'], None, None, None, small['id'], None])
-        self.assertEqual(save_data.party_cost(data)['black'], 260)
-        self.assertEqual(save_data.ink_left(data)['black'], save_data.START_INK - 260)   # 놓으면 준다
+        self.assertEqual(save_data.party_cost(data)['black'], big_ink + 60)
+        self.assertEqual(save_data.ink_left(data)['black'], save_data.START_INK - big_ink - 60)   # 놓으면 준다
         self.assertTrue(save_data.place(data, 0, small['id']))           # 바꿔 놓기: 있던 유닛은 빠진다고 친다
         self.assertEqual(save_data.party_cost(data)['black'], 120)
         save_data.swap_slots(data, 0, 5)
@@ -243,6 +244,28 @@ class UnitSaveTest(unittest.TestCase):
         self.assertEqual(data['party'][4], None)
         save_data.remove_from_party(data, 5)
         self.assertEqual(save_data.ink_left(data)['black'], save_data.START_INK)          # 빼면 돌아온다
+
+    def test_party_hp_carries_over_until_healed(self):
+        data = save_data.new_game(1, self.dir, now=0.0)
+        u = save_data.add_unit(data, 'tank', {}, {'black': 10}, self.dir)
+        save_data.add_to_party(data, u['id'])
+        save_data.add_to_party(data, u['id'])
+        data['party_hp'][0] = 0.4                                      # 전투에서 다침
+        save_data.write(data, self.dir)
+        loaded = save_data.load(1, self.dir)
+        self.assertEqual(loaded['party_hp'][0], 0.4)                   # 저장해도 이어진다
+        self.assertEqual(save_data.hurt_slots(loaded), [0])
+        save_data.swap_slots(loaded, 0, 4)                             # 옮기면 체력도 따라간다
+        self.assertEqual(loaded['party_hp'][4], 0.4)
+        self.assertEqual(loaded['party_hp'][0], 1.0)
+        black = loaded['ink']['black']
+        self.assertFalse(save_data.heal(loaded, [4], 10 ** 6))          # 잉크가 모자라면 못 한다
+        self.assertTrue(save_data.heal(loaded, [4], 12))
+        self.assertEqual(loaded['party_hp'][4], 1.0)
+        self.assertEqual(loaded['ink']['black'], black - 12)          # 치료에 쓴 잉크는 정말로 빠진다
+        loaded['party_hp'][1] = 0.0
+        save_data.remove_from_party(loaded, 1)                         # 빼면 다친 상태도 없어진다
+        self.assertEqual(loaded['party_hp'][1], 1.0)
 
     def test_party_full(self):
         data = save_data.new_game(1, self.dir, now=0.0)
