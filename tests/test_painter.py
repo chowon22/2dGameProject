@@ -108,6 +108,27 @@ class UnitSaveTest(unittest.TestCase):
         self.assertTrue(os.path.isdir(save_data.units_dir(1, self.dir)))
         self.assertEqual(save_data.add_unit(data, 'melee', {}, {}, self.dir)['id'], 2)
 
+    def test_party_stays_within_ink(self):
+        data = save_data.new_game(1, self.dir, now=0.0)          # 검정 START_INK
+        big = save_data.add_unit(data, 'tank', {}, {'black': 200}, self.dir)
+        small = save_data.add_unit(data, 'melee', {}, {'black': 60}, self.dir)
+        red = save_data.add_unit(data, 'ranged', {}, {'red': 5}, self.dir)
+        self.assertTrue(save_data.add_to_party(data, big['id']))
+        self.assertFalse(save_data.add_to_party(data, big['id']))     # 400 > 300
+        self.assertTrue(save_data.add_to_party(data, small['id']))
+        self.assertFalse(save_data.add_to_party(data, red['id']))     # 빨강은 없다
+        self.assertEqual(save_data.party_cost(data)['black'], 260)
+        save_data.remove_from_party(data, 0)
+        self.assertEqual(data['party'], [small['id']])
+        self.assertTrue(save_data.add_to_party(data, small['id']))    # 같은 프리셋 여러 번
+
+    def test_party_max(self):
+        data = save_data.new_game(1, self.dir, now=0.0)
+        u = save_data.add_unit(data, 'tank', {}, {'black': 1}, self.dir)
+        for _ in range(save_data.PARTY_MAX):
+            self.assertTrue(save_data.add_to_party(data, u['id']))
+        self.assertFalse(save_data.add_to_party(data, u['id']))
+
     def test_delete_removes_unit_images(self):
         data = save_data.new_game(3, self.dir, now=0.0)
         save_data.add_unit(data, 'tank', {}, {}, self.dir)

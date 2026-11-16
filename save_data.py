@@ -7,6 +7,7 @@ pico2d 와 무관한 순수 로직이라 따로 테스트할 수 있다 (tests/t
 - save_current(): 지금 슬롯을 저장 (플레이 시간을 더한다)
 - delete(slot): 지우기 (그 슬롯의 유닛 그림도 함께)
 - add_unit(data, frame, counts, ink_used): 그린 유닛을 프리셋으로 적는다 (드는 잉크만 기록, 가진 잉크는 그대로). 그림은 unit_path() 에 저장
+- party: 내 유닛 화면에서 고른 유닛 (프리셋 id 목록, 같은 프리셋을 여러 번 고를 수 있다). 드는 잉크 합이 가진 잉크를 넘지 않게 can_add() 로 막는다
 """
 import json
 import os
@@ -44,6 +45,7 @@ def blank(slot, now=None):
         'intro_seen': False,  # 도입 이야기(컷씬)를 봤는가 — 보기 전이면 준비 화면 전에 보여 준다
         'ink': {'black': START_INK, 'red': 0, 'green': 0, 'blue': 0},
         'units': [],          # 그린 유닛 (프리셋): {'id', 'frame', 'counts', 'ink'} — 그림은 unit_path(slot, id)
+        'party': [],          # 내 유닛: 데리고 갈 프리셋 id 목록 (같은 id 가 여러 번 있어도 된다)
     }
 
 
@@ -117,6 +119,51 @@ def add_unit(data, frame, counts, ink_used, folder=None):
     data['units'].append(unit)
     os.makedirs(units_dir(data['slot'], folder), exist_ok=True)
     return unit
+
+
+PARTY_MAX = 6
+
+
+def find_unit(data, unit_id):
+    for u in data['units']:
+        if u['id'] == unit_id:
+            return u
+    return None
+
+
+def party_units(data):
+    """고른 유닛 기록 목록 (없어진 프리셋은 건너뛴다)."""
+    return [u for u in (find_unit(data, i) for i in data['party']) if u]
+
+
+def party_cost(data):
+    """고른 유닛들에 드는 잉크 합 (색별)."""
+    total = {c: 0 for c in data['ink']}
+    for u in party_units(data):
+        for c, n in u.get('ink', {}).items():
+            total[c] = total.get(c, 0) + n
+    return total
+
+
+def can_add(data, unit):
+    """이 유닛을 더 골라도 가진 잉크 안인가 (자리도 남았는가)."""
+    if len(party_units(data)) >= PARTY_MAX:
+        return False
+    cost = party_cost(data)
+    return all(cost.get(c, 0) + n <= data['ink'].get(c, 0) for c, n in unit.get('ink', {}).items())
+
+
+def add_to_party(data, unit_id):
+    unit = find_unit(data, unit_id)
+    if not unit or not can_add(data, unit):
+        return False
+    data['party'].append(unit_id)
+    return True
+
+
+def remove_from_party(data, index):
+    if 0 <= index < len(data['party']):
+        data['party'].pop(index)
 
 
 # ---------------------------------------------------------------- 지금 하고 있는 세이브
