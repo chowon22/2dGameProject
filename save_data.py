@@ -11,6 +11,7 @@ pico2d 와 무관한 순수 로직이라 따로 테스트할 수 있다 (tests/t
 - party: 내 유닛 화면에서 필드 자리(6칸: 앞줄 3 + 뒷줄 3)마다 놓은 프리셋 id. 같은 프리셋을 여러 번 놓을 수 있다.
   드는 잉크 합이 가진 잉크를 넘지 않게 can_place() 로 막는다
 """
+import glob
 import json
 import os
 import shutil
@@ -115,14 +116,14 @@ def unit_path(slot, unit_id, folder=None):
     return os.path.join(units_dir(slot, folder), f'unit_{unit_id}.png')
 
 
-def gear_path(slot, unit_id, folder=None):
-    """무기 종이 그림."""
-    return os.path.join(units_dir(slot, folder), f'unit_{unit_id}_gear.png')
+def gear_path(slot, unit_id, folder=None, group=0):
+    """무기 종이 그림 (무기 묶음마다 한 장: 원딜은 0 활, 1 화살)."""
+    return os.path.join(units_dir(slot, folder), f'unit_{unit_id}_gear{group}.png')
 
 
 def add_unit(data, frame, counts, ink_used, folder=None, body='medium'):
     """유닛 기록을 더한다. 가진 잉크는 줄지 않고, 이 유닛을 꺼낼 때 드는 잉크(ink_used)만 적어 둔다.
-    그림 PNG 는 부른 쪽이 unit_path(사람 종이)·gear_path(무기 종이) 에 저장한다 (폴더는 여기서 만들어 둔다)."""
+    그림 PNG 는 부른 쪽이 unit_path(사람 종이)·gear_path(무기 종이마다) 에 저장한다 (폴더는 여기서 만들어 둔다)."""
     unit_id = max((u['id'] for u in data['units']), default=0) + 1
     unit = {'id': unit_id, 'frame': frame, 'body': body, 'counts': dict(counts), 'ink': dict(ink_used)}
     data['units'].append(unit)
@@ -136,7 +137,9 @@ def delete_unit(data, unit_id, folder=None):
         return False
     data['units'] = [u for u in data['units'] if u['id'] != unit_id]
     data['party'] = [None if i == unit_id else i for i in data['party']]
-    for path in (unit_path(data['slot'], unit_id, folder), gear_path(data['slot'], unit_id, folder)):
+    paths = [unit_path(data['slot'], unit_id, folder)] + glob.glob(
+        os.path.join(units_dir(data['slot'], folder), f'unit_{unit_id}_gear*.png'))
+    for path in paths:
         try:
             os.remove(path)
         except FileNotFoundError:
