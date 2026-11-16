@@ -7,6 +7,7 @@
 - limit: 색마다 쓸 수 있는 잉크 양. 넘치게 칠하려는 붓 도장은 찍히지 않는다 (#6 잉크 상한)
 - counts / ink_used: 색별 픽셀 수, 그만큼 드는 잉크
 - save_png / load_png: PNG 로 저장·불러오기 (#3)
+- undo: 붓질 한 번·다 지우기·불러오기를 하나씩 되돌린다 (최근 MAX_UNDO 번)
 """
 import math
 
@@ -20,6 +21,7 @@ RGB = {'black': (44, 38, 56), 'red': (222, 84, 96), 'green': (70, 170, 108), 'bl
 PIXELS_PER_INK = 50   # 잉크 1 로 칠할 수 있는 픽셀 수 (수치는 미정 사항, 나중에 조정)
 BRUSH_R = 3.0         # 붓 반지름 (선 굵기 6px 남짓, PRD 8.1 선 굵기 3~5px 와 맞춤)
 ERASER_R = 9.0
+MAX_UNDO = 30
 
 _PALETTE = np.array([(0, 0, 0, 0)] + [RGB[c] + (255,) for c in COLORS], dtype=np.uint8)
 
@@ -41,6 +43,7 @@ class Paper:
         self.dirty = None       # 다시 그려야 할 영역 (x0, y0, x1, y1). 화면 쪽이 가져가면 None 으로
         self.last = None        # 끌고 있는 붓의 마지막 자리
         self.blocked = False    # 이번 붓질에서 잉크가 모자라 못 칠한 적이 있는가
+        self.history = []       # 되돌리기용: 바꾸기 전 labels
 
     # ------------------------------------------------------------ 잉크
     def count(self, color):
@@ -56,7 +59,27 @@ class Paper:
         return int(self.counts[1:].sum()) == 0
 
     # ------------------------------------------------------------ 붓질
+    def snapshot(self):
+        """지금 상태를 되돌리기 목록에 넣는다."""
+        self.history.append(self.labels.copy())
+        del self.history[:-MAX_UNDO]
+
+    def can_undo(self):
+        return bool(self.history)
+
+    def undo(self):
+        if not self.history:
+            return False
+        self._set_labels(self.history.pop())
+        return True
+
+    def _set_labels(self, labels):
+        self.labels = labels
+        self.counts = np.bincount(labels.ravel(), minlength=len(COLORS) + 1).astype(np.int64)
+        self._mark(0, 0, self.w, self.h)
+
     def begin(self, x, y, tool, limit=None):
+        self.snapshot()
         self.last = None
         self.blocked = False
         self.drag(x, y, tool, limit)
@@ -105,6 +128,8 @@ class Paper:
         return True
 
     def clear(self):
+        if not self.is_empty():
+            self.snapshot()
         self.labels[:] = 0
         self.counts[:] = 0
         self._mark(0, 0, self.w, self.h)
@@ -142,6 +167,5 @@ class Paper:
         dx0, dy0 = max(0, ox), max(0, oy)
         cw, ch = min(w - sx0, self.w - dx0), min(h - sy0, self.h - dy0)
         labels[dy0:dy0 + ch, dx0:dx0 + cw] = lab[sy0:sy0 + ch, sx0:sx0 + cw]
-        self.labels = labels
-        self.counts = np.bincount(labels.ravel(), minlength=len(COLORS) + 1).astype(np.int64)
-        self._mark(0, 0, self.w, self.h)
+        self.snapshot()
+        self._set_labels(labels)

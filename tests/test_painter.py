@@ -67,6 +67,23 @@ class PaperTest(unittest.TestCase):
             q.load_png(path)
         self.assertEqual(q.counts_dict(), p.counts_dict())
 
+    def test_undo_strokes_clear_and_load(self):
+        p = Paper(100, 60)
+        p.begin(20, 30, 'black', PLENTY); p.drag(80, 30, 'black', PLENTY); p.end()
+        one = p.counts_dict()
+        p.begin(50, 10, 'red', PLENTY); p.end()
+        self.assertTrue(p.undo())                       # 붓질 하나
+        self.assertEqual(p.counts_dict(), one)
+        p.clear()
+        self.assertTrue(p.undo())                       # 다 지우기
+        self.assertEqual(p.counts_dict(), one)
+        self.assertTrue(p.undo())
+        self.assertTrue(p.is_empty())
+        self.assertFalse(p.undo())                      # 더 없음
+        for i in range(painter.MAX_UNDO + 5):
+            p.begin(i, 5, 'black', PLENTY)
+        self.assertEqual(len(p.history), painter.MAX_UNDO)
+
     def test_clear_and_dirty(self):
         p = Paper(50, 50)
         p.dirty = None
