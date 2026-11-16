@@ -9,12 +9,14 @@
 프리셋 카드에 마우스를 올리면 × 가 뜨고, 두 번 누르면 그 프리셋을 지운다
 오른쪽: 저장하기(프리셋에 더하고 이 유닛에 드는 잉크를 적어 둔다 — 가진 잉크는 그대로) / 다 지우기 / 닫기
 
-키: 1~4 잉크, E 지우개, ESC 닫기
+되돌리기: 붓질·다 지우기·불러오기를 하나씩 되돌린다 (Ctrl+Z)
+키: 1~4 잉크, E 지우개, Ctrl+Z 되돌리기, ESC 닫기
 """
 import numpy as np
 from pico2d import (clear_canvas, update_canvas, get_events,
                     SDL_QUIT, SDL_KEYDOWN, SDL_MOUSEMOTION, SDL_MOUSEBUTTONDOWN, SDL_MOUSEBUTTONUP, SDL_BUTTON_LEFT,
-                    SDLK_ESCAPE, SDLK_1, SDLK_4, SDLK_e)
+                    SDLK_ESCAPE, SDLK_1, SDLK_4, SDLK_e, SDLK_z)
+from sdl2 import SDL_GetModState, KMOD_CTRL
 
 import frames
 import game_framework
@@ -40,10 +42,11 @@ PRESET_GAP, MAX_PRESETS = 124, 8
 FRAME_GAP = 216
 INK_GAP = 120
 # 종이: 가운데 (PAPER_X, PAPER_Y), 실제로 칠하는 곳은 frames.PAPER_W x PAPER_H
-PAPER_X, PAPER_Y = 520, 222
+PAPER_X, PAPER_Y = 470, 222   # 왼쪽 끝을 위 줄들(ROW_X)에 맞춤
 PAPER_L = PAPER_X - frames.PAPER_W // 2
 PAPER_T = PAPER_Y + frames.PAPER_H // 2     # 종이 윗변 (pico y)
-SIDE_X = 1080
+SIDE_X = 975                    # 오른쪽 칸 가운데
+SIDE_L, SIDE_R = 870, 1080     # 오른쪽 버튼 두 줄
 TOOLS = painter.COLORS + (painter.ERASER,)
 
 panel = paper_img = ink_wave = eraser_img = fade = toast_img = None
@@ -146,6 +149,11 @@ def save_unit():
     say(f'{frames.get(frame_id)["name"]} 유닛을 프리셋에 저장했어요!')
 
 
+def undo():
+    if not paper.undo():
+        say('되돌릴 게 없어요')
+
+
 def clear_paper():
     global picked
     paper.clear()
@@ -177,9 +185,11 @@ def init():
     if paper_tex is None:
         paper_tex = LiveImage(frames.PAPER_W, frames.PAPER_H)
     paper.dirty = (0, 0, paper.w, paper.h)
-    buttons = [Button(SIDE_X, y, f'button_{name}.png', f'button_{name}_hover.png', action, 0.3 * i, 'draw')
-               for i, (name, y, action) in enumerate((('save', 300, save_unit), ('clear', 200, clear_paper),
-                                                      ('close', 100, close)))]
+    # 오른쪽 두 칸: 위 줄 되돌리기·다 지우기, 아래 줄 저장하기·닫기
+    buttons = [Button(x, y, f'button_{name}.png', f'button_{name}_hover.png', action, 0.3 * i, 'draw')
+               for i, (name, x, y, action) in enumerate((
+                   ('undo', SIDE_L, 300, undo), ('clear', SIDE_R, 300, clear_paper),
+                   ('save', SIDE_L, 190, save_unit), ('close', SIDE_R, 190, close)))]
     tool = 'black'
     picked = None
     painting = False
@@ -254,6 +264,8 @@ def handle_events():
                 pick_tool(painter.COLORS[event.key - SDLK_1])
             elif event.key == SDLK_e:
                 pick_tool(painter.ERASER)
+            elif event.key == SDLK_z and SDL_GetModState() & KMOD_CTRL and not painting:
+                undo()
         elif event.type == SDL_MOUSEMOTION:
             mx, my = title_mode.to_canvas(event)
             move_mouse((mx, my))
@@ -368,6 +380,7 @@ def draw_side():
     lines = [f'{names[c]} {used[c]}' for c in painter.COLORS if used[c]]
     text.draw('이 그림에 드는 잉크', SIDE_X, 412, 24, INK, 'c')
     text.draw('  ·  '.join(lines) if lines else '아직 없음', SIDE_X, 380, 24, (130, 110, 150), 'c')
+    text.draw('Ctrl+Z 로도 되돌려요', SIDE_X, 110, 20, (150, 128, 170), 'c')
 
 
 def draw_toast():
