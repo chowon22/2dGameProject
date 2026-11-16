@@ -13,10 +13,10 @@ BEATS = {'fire': 'grass', 'grass': 'water', 'water': 'fire'}   # 불 > 풀 > 물
 BASE = {   # 역할마다 기본 (체력, 공격력, 버프량)
     'tank': (40, 4, 0), 'melee': (26, 8, 0), 'ranged': (20, 7, 0), 'support': (22, 3, 4),
 }
-BLACK_PER = {   # 검정 몇 픽셀마다 역할 능력치 +1
-    'tank': ('hp', 60), 'melee': ('atk', 300), 'ranged': ('atk', 320), 'support': ('buff', 400),
+BLACK_PER = {   # 검정 몇 픽셀마다 역할 능력치 +1 (그린 그림은 보통 검정 8000 ~ 13000 px)
+    'tank': ('hp', 200), 'melee': ('atk', 800), 'ranged': ('atk', 900), 'support': ('buff', 1000),
 }
-BLACK_HP_PER = 250            # 모든 역할: 검정 이만큼마다 체력 +1
+BLACK_HP_PER = 800            # 모든 역할: 검정 이만큼마다 체력 +1
 BODY_MUL = {'small': (0.85, 1.1), 'medium': (1.0, 1.0), 'large': (1.2, 0.92)}   # (체력, 공격력)
 ELEMENT_MIN_SHARE = 0.08      # 색이 칠한 픽셀의 이만큼은 넘어야 원소가 생긴다
 ELEMENT_FULL = 2000           # 색을 이만큼 칠하면 상성 세기 최대
