@@ -6,13 +6,15 @@
   · 자리를 고른 채 다른 자리를 누르면 두 자리를 맞바꾼다 (빈 자리면 옮기기). 같은 자리를 다시 누르면 고르기 취소
   · 자리를 안 고르고 프리셋을 누르면 앞줄부터 빈 자리에 놓인다
   · 놓인 유닛에 마우스를 올리면 × — 누르면 자리에서 뺀다
+  · 끌어 놓기: 놓인 유닛을 다른 자리로 끌면 옮기기·맞바꾸기, 프리셋 카드를 자리로 끌면 그 자리에 놓기.
+    자리 밖에 놓으면 그대로 돌아간다
 - 잉크 (오른쪽 위): 색마다 '놓은 유닛에 드는 잉크 / 가진 잉크'. 가진 잉크를 넘게는 놓을 수 없다
 - 내 프리셋 (아래): 전체 / 탱커 / 근접 딜러 / 원거리 딜러 / 서포터 칸으로 나눠 본다. 지금 놓을 수 없는 카드는 흐리게.
   같은 프리셋을 여러 번 놓을 수 있다. 많으면 마우스 휠로 넘긴다. 카드의 × 를 두 번 누르면 프리셋을 지운다
 - 다 빼기 / 닫기, ESC 닫기
 """
-from pico2d import (clear_canvas, update_canvas, get_events,
-                    SDL_QUIT, SDL_KEYDOWN, SDL_MOUSEMOTION, SDL_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT, SDLK_ESCAPE)
+from pico2d import (clear_canvas, update_canvas, get_events, SDL_QUIT, SDL_KEYDOWN, SDL_MOUSEMOTION,
+                    SDL_MOUSEBUTTONDOWN, SDL_MOUSEBUTTONUP, SDL_BUTTON_LEFT, SDLK_ESCAPE)
 from sdl2 import SDL_MOUSEWHEEL
 
 import frames
@@ -41,7 +43,7 @@ LANE_SKEW = (56, 0, -56)                  # 먼 줄은 오른쪽으로 (비스�
 FRONT_X, BACK_X = 476, 316
 FIGURE = (84, 70)                         # 자리에 서 있는 그림 최대 크기
 SPOT_W, SPOT_TOP = 48, 50                 # 자리 누르는 범위: 가로 ±48, 발 아래 16 ~ 위 50
-DEL_DX, DEL_DY = 40, 58                   # 놓인 유닛 지우기 × 자리 (발 기준)
+DEL_DX, DEL_DY = -40, 58                  # 놓인 유닛 지우기 × 자리 (발 기준, 왼쪽 위: 먼 줄 자리와 안 겹치게)
 
 INK_X, INK_TOP = 1010, 668
 LIST_Y = 404
@@ -61,6 +63,9 @@ tab = 'all'
 deleter = None
 selected = None                  # 고른 자리 (없으면 None)
 hover_slot = None                # 마우스가 올라간 놓인 유닛 자리
+press = None                     # 누르고 있는 것: ('slot', 자리) / ('preset', 유닛), 누른 자리
+dragging = False                 # 누른 채 DRAG_START 넘게 움직였으면 끌기
+DRAG_START = 6
 toast = None
 t = 0.0
 
@@ -173,7 +178,7 @@ def close():
 # ---------------------------------------------------------------- 모드
 def init():
     global panel, fade, toast_img, field_img, spot_imgs, ink_icons, buttons, row0, tab, deleter
-    global selected, hover_slot, toast, t
+    global selected, hover_slot, press, dragging, toast, t
     panel = image('draw', 'panel.png')
     fade = image('common', 'fade.png')
     toast_img = image('prepare', 'toast.png')
@@ -187,7 +192,8 @@ def init():
     row0 = 0
     tab = 'all'
     deleter = unit_cards.Deleter()
-    selected = hover_slot = None
+    selected = hover_slot = press = None
+    dragging = False
     toast = None
     t = 0.0
     title_mode.move_mouse(title_mode.mouse)
@@ -203,6 +209,47 @@ def pause():
 
 def resume():
     pass
+
+
+def press_down(mx, my):
+    """마우스 누름: 버튼·× ·칸은 바로 처리, 놓인 유닛과 프리셋 카드는 뗄 때 (누르기 / 끌어 놓기) 처리."""
+    global press, dragging
+    dragging = False
+    press = None
+    if not data():
+        return
+    on_del = hover_slot is not None and abs(mx - spot_pos(hover_slot)[0] - DEL_DX) <= 16 and         abs(my - spot_pos(hover_slot)[1] - DEL_DY) <= 16
+    if not on_del and not any(unit_cards.hit_delete(x, y, mx, my) and deleter.state(u) for u, x, y in visible()):
+        slot = slot_at(mx, my)
+        if slot is not None and data()['party'][slot] is not None:
+            press = (('slot', slot), (mx, my))
+            return
+        for unit, x, y in visible():
+            if unit_cards.hit(x, y, mx, my):
+                press = (('preset', unit), (mx, my))
+                return
+    click(mx, my)
+
+
+def release(mx, my):
+    global press, dragging, selected
+    if press is None:
+        return
+    (kind, what), (px, py) = press
+    was_drag = dragging
+    press, dragging = None, False
+    if not was_drag:   # 그냥 누르기
+        click_slot(what) if kind == 'slot' else pick(what)
+        return
+    target = slot_at(mx, my)
+    selected = None
+    if target is None:
+        return         # 자리 밖: 그대로
+    if kind == 'slot':
+        if target != what:
+            save_data.swap_slots(data(), what, target)
+    elif not save_data.place(data(), target, what['id']):
+        say('잉크가 모자라요')
 
 
 def click(mx, my):
@@ -240,8 +287,10 @@ def click(mx, my):
 
 
 def mouse_move(mx, my):
-    global hover_slot
+    global hover_slot, dragging
     title_mode.move_mouse((mx, my))
+    if press and not dragging and abs(mx - press[1][0]) + abs(my - press[1][1]) > DRAG_START:
+        dragging = True
     deleter.move(visible(), mx, my)
     for b in buttons:
         b.mouse_move(mx, my)
@@ -269,7 +318,9 @@ def handle_events():
             mouse_move(*title_mode.to_canvas(event))
         elif event.type == SDL_MOUSEBUTTONDOWN and event.button == SDL_BUTTON_LEFT:
             if t > FADE_IN:
-                click(*title_mode.to_canvas(event))
+                press_down(*title_mode.to_canvas(event))
+        elif event.type == SDL_MOUSEBUTTONUP and event.button == SDL_BUTTON_LEFT:
+            release(*title_mode.to_canvas(event))
         elif event.type == SDL_MOUSEWHEEL:
             row0 = min(max(0, row0 - event.wheel.y), max_row0())
 
@@ -299,17 +350,36 @@ def draw_field():
     if not data():
         return
     party = data()['party']
+    source = press[0][1] if dragging and press[0][0] == 'slot' else None
+    target = slot_at(*title_mode.mouse) if dragging else None
     # 먼 줄부터 그려야 가까운 줄이 앞에 온다
     for slot in sorted(range(save_data.PARTY_MAX), key=lambda s: s % 3):
         x, y = spot_pos(slot)
-        spot_imgs['_on' if slot == selected else ''].draw(x, y)
+        spot_imgs['_on' if slot in (selected, target) else ''].draw(x, y)
         unit = save_data.find_unit(data(), party[slot]) if party[slot] is not None else None
         if unit:
             img = unit_cards.thumb(unit, FIGURE)
             if img:
+                a = 0.3 if slot == source else 1.0   # 끌고 있는 유닛은 원래 자리에 흐리게
+                img.opacify(a)
                 img.draw(x, y - 6 + img.h / 2)
-            if slot == hover_slot:
+                img.opacify(1)
+            if slot == hover_slot and not dragging:
                 image('draw', 'card_del.png').draw(x + DEL_DX, y + DEL_DY)
+
+
+def draw_dragged():
+    """끌고 있는 유닛·프리셋을 커서에 붙여 그린다."""
+    if not dragging or not data():
+        return
+    kind, what = press[0]
+    unit = save_data.find_unit(data(), data()['party'][what]) if kind == 'slot' else what
+    img = unit_cards.thumb(unit, FIGURE) if unit else None
+    if img:
+        mx, my = title_mode.mouse
+        img.opacify(0.85)
+        img.draw(mx, my - 10)
+        img.opacify(1)
 
 
 def draw_ink():
@@ -374,6 +444,7 @@ def draw():
     draw_presets()
     for b in buttons:
         b.draw()
+    draw_dragged()
     draw_toast()
     if t < FADE_IN:
         fade.opacify(0.5 * (1 - t / FADE_IN))
