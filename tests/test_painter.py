@@ -90,6 +90,20 @@ class FramesTest(unittest.TestCase):
             self.assertTrue((counts[1:] > 50).all(), fid)
 
 
+    def test_gear_is_apart_from_body(self):
+        """무기·방패는 몸·손과 떨어져 있어야 한다 (따로 애니메이션 하려고)."""
+        from PIL import Image, ImageFilter
+        for fid in frames.IDS:
+            mask = frames.part_mask(fid)
+            names = frames.part_names(fid)
+            gear_ids = [names.index(g) + 1 for g in frames.gear_names(fid)]
+            gear = np.isin(mask, gear_ids)
+            body = (mask > 0) & ~gear
+            near = np.asarray(Image.fromarray((gear * 255).astype(np.uint8)).filter(
+                ImageFilter.MaxFilter(frames.GEAR_GAP * 2 + 1))) > 0
+            self.assertFalse((near & body).any(), fid)
+
+
 class UnitSaveTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
