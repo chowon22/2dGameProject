@@ -2,15 +2,16 @@
 
 위에서부터
 - 내 프리셋: 그려서 저장한 유닛. 누르면 그 그림과 틀이 종이에 올라와 이어 그리거나 고칠 수 있다
-- 틀: 탱커 / 근접 딜러 / 원거리 딜러 / 서포터. 고르면 종이에 흐릿한 틀 실루엣이 깔린다
+- 틀: 탱커(바위 거북) / 근접 딜러(고양이) / 원거리 딜러(아기 새) / 서포터(토끼). 고르면 종이에 연필 점선 밑그림이 깔린다
 - 잉크: 검정·빨강·초록·파랑 잉크병 + 지우개. 병 옆 숫자는 가진 잉크 (그려도 줄지 않는다)
-- 종이: 들어오자마자 바로 그릴 수 있다. 가진 잉크와 상관없이 어떤 색이든 마음껏 칠한다
+- 종이: 들어오자마자 바로 그릴 수 있다. 종이 위 커서 자리에는 지금 붓 색·굵기의 점이 보인다. 가진 잉크와 상관없이 어떤 색이든 마음껏 칠한다
   (잉크는 내 유닛에서 고를 때 따진다)
 프리셋 카드에 마우스를 올리면 × 가 뜨고, 두 번 누르면 그 프리셋을 지운다
 오른쪽: 저장하기(프리셋에 더하고 이 유닛에 드는 잉크를 적어 둔다 — 가진 잉크는 그대로) / 다 지우기 / 닫기
 
 키: 1~4 잉크, E 지우개, ESC 닫기
 """
+import numpy as np
 from pico2d import (clear_canvas, update_canvas, get_events,
                     SDL_QUIT, SDL_KEYDOWN, SDL_MOUSEMOTION, SDL_MOUSEBUTTONDOWN, SDL_MOUSEBUTTONUP, SDL_BUTTON_LEFT,
                     SDLK_ESCAPE, SDLK_1, SDLK_4, SDLK_e)
@@ -48,7 +49,8 @@ TOOLS = painter.COLORS + (painter.ERASER,)
 panel = paper_img = ink_ring = eraser_img = fade = toast_img = None
 frame_imgs = {}
 ink_icons = {}
-silhouettes = {}
+guides = {}
+brush_tips = {}         # 도구 → 커서 자리에 보일 붓 점
 buttons = []
 paper = None
 paper_tex = None
@@ -157,7 +159,7 @@ def close():
 # ---------------------------------------------------------------- 모드
 def init():
     global panel, paper_img, ink_ring, eraser_img, fade, toast_img, frame_imgs, ink_icons
-    global silhouettes, buttons, paper, paper_tex, tool, picked, painting, deleter, toast, t
+    global guides, brush_tips, buttons, paper, paper_tex, tool, picked, painting, deleter, toast, t
     panel = image('draw', 'panel.png')
     paper_img = image('draw', 'paper.png')
     ink_ring = image('draw', 'ink_ring.png')
@@ -167,8 +169,10 @@ def init():
     frame_imgs = {(f, on): image('draw', f'frame_{f}{"_on" if on else ""}.png')
                   for f in frames.IDS for on in (False, True)}
     ink_icons = {c: image('prepare', f'ink_{c}.png') for c in painter.COLORS}
-    if not silhouettes:
-        silhouettes = {f: LiveImage(frames.PAPER_W, frames.PAPER_H, frames.silhouette(f)) for f in frames.IDS}
+    guides = {f: image('draw', f'guide_{f}.png') for f in frames.IDS}
+    if not brush_tips:
+        brush_tips = {name: LiveImage(*tip.shape[1::-1], tip) for name, tip in
+                      ((name, make_brush_tip(name)) for name in TOOLS)}
     paper = painter.Paper(frames.PAPER_W, frames.PAPER_H)
     if paper_tex is None:
         paper_tex = LiveImage(frames.PAPER_W, frames.PAPER_H)
@@ -309,7 +313,7 @@ def draw_inks():
     for i, name in enumerate(TOOLS):
         x = ink_x(i)
         if name == tool:
-            ink_ring.draw(x + 18, INK_Y - 26)
+            ink_ring.draw(x, INK_Y - 25, 66, 30)   # 고른 병 바로 아래 가운데
         bob = 3 if name == tool else 0
         if name == painter.ERASER:
             eraser_img.draw(x, INK_Y + bob, 48, 48)
@@ -320,9 +324,39 @@ def draw_inks():
     text.draw(f'{f["name"]}:  검정 → {f["stat"]} ↑  ·  색 → 원소', ink_x(len(TOOLS)) - 10, INK_Y, 22, (130, 110, 150))
 
 
+def make_brush_tip(name):
+    """커서(펜촉) 위에 보일 붓 점 (RGBA): 그 색 점(흰 테두리) + 옅은 같은 색 고리. 지우개는 지우는 크기만 한 흰 동그라미."""
+    if name == painter.ERASER:
+        r, ring_r, fill, ring = painter.ERASER_R, painter.ERASER_R, (255, 255, 255, 210), (150, 128, 170, 230)
+    else:
+        r, ring_r, fill, ring = painter.BRUSH_R + 2, painter.BRUSH_R + 8, painter.RGB[name] + (255,), painter.RGB[name] + (150,)
+    size = int(ring_r * 2 + 6)
+    c = size / 2
+    yy, xx = np.mgrid[0:size, 0:size] + 0.5
+    d = np.hypot(xx - c, yy - c)
+    out = np.zeros((size, size, 4), np.uint8)
+    out[..., :3] = ring[:3]
+    out[..., 3] = (np.clip(1.4 - abs(d - ring_r) / 1.2, 0, 1) * ring[3]).astype(np.uint8)   # 부드러운 테두리
+    a = (np.clip((r - 1 if name == painter.ERASER else r + 0.5) - d, 0, 1) * fill[3]).astype(np.uint8)
+    if name != painter.ERASER:   # 점 둘레 흰 테두리 (펜촉·그림 위에서도 잘 보이게)
+        rim = (np.clip(r + 2 - d, 0, 1) * 255).astype(np.uint8)
+        out[rim > out[..., 3], :3] = 255
+        out[..., 3] = np.maximum(out[..., 3], rim)
+    keep = a > 0
+    out[keep, :3] = fill[:3]
+    out[..., 3] = np.maximum(out[..., 3], a)
+    return out
+
+
+def draw_brush_tip():
+    mx, my = title_mode.mouse
+    if to_paper(mx, my):
+        brush_tips[tool].draw(round(mx), round(my))
+
+
 def draw_paper():
     paper_img.draw(PAPER_X, PAPER_Y)
-    silhouettes[frame_id].draw(PAPER_X, PAPER_Y)
+    guides[frame_id].draw(PAPER_X, PAPER_Y)
     paper_tex.draw(PAPER_X, PAPER_Y)
 
 
@@ -362,4 +396,5 @@ def draw():
         fade.draw(W / 2, H / 2, W, H)
         fade.opacify(1)
     title_mode.draw_cursor()
+    draw_brush_tip()   # 펜촉 위에: 지금 칠할 색이 펜 끝에 묻은 듯
     update_canvas()
