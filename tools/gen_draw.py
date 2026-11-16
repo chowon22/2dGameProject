@@ -7,6 +7,7 @@
 - frame_<id> / frame_<id>_on: 틀 고르기 카드 (밑그림 + 이름)
 - ink_wave: 고른 잉크 아래 구불구불한 밑줄 (형광펜처럼), eraser: 지우개
 - tab_<all|틀 id> / _on: 내 유닛 화면의 프리셋 나누기 칸 (전체·탱커·근접 딜러·원거리 딜러·서포터)
+- field / spot / spot_on / spot_enemy: 내 유닛 화면의 필드 미리보기 (흑백 들판 + 우리 자리 6칸·적 자리 점선 타원)
 - card_del / card_del_confirm: 프리셋 카드 모서리의 지우기 × (한 번 누르면 붉게 → 한 번 더 누르면 지움)
 - button_save / button_clear / button_close / button_unequip (+ _hover)
 
@@ -189,6 +190,50 @@ def tab(i, label, tint, on):
     return img
 
 
+FIELD = (780, 240)
+GRAYS = ((236, 234, 238), (214, 211, 218), (190, 186, 196))
+
+
+def field():
+    """색을 빼앗긴 흑백 들판 (PRD 8.1): 먼 언덕·가까운 언덕·땅, 가운데 옅은 점선 경계."""
+    w, h = FIELD
+    sh = Sheet(w, h, seed=1200)
+    sh.line = GUIDE_LINE
+    box = pastel.wobbly_box(4, 4, w - 4, h - 4, 18, sh.rng, amp=1.2)
+    bg = Sheet(w, h, seed=1201)
+    bg.fill_poly([(0, 0), (w, 0), (w, h), (0, h)], (250, 249, 251), 255)
+    hills = [(x, 92 + 18 * math.sin(x / 90) + 8 * math.sin(x / 31)) for x in range(0, w + 10, 10)]
+    bg.fill_poly(hills + [(w, h), (0, h)], GRAYS[0])
+    near = [(x, 128 + 10 * math.sin(x / 70 + 1.3)) for x in range(0, w + 10, 10)]
+    bg.fill_poly(near + [(w, h), (0, h)], GRAYS[1])
+    for x, y in ((90, 200), (300, 214), (520, 196), (700, 218)):
+        bg.wash(x, y, 90, 14, GRAYS[2], alpha=90, layers=2, blur=5)
+    sh.masked(bg, pastel.poly_mask((w, h), box))
+    inside = lambda pts: [(x, y) for x, y in pts if 10 <= x <= w - 10]  # noqa: E731  틀 밖으로 안 나가게
+    sh.stroke(inside(hills), 2.4, alpha=150, amp=0.8)
+    sh.stroke(inside(near), 2.4, alpha=150, amp=0.8)
+    for d in _dashes([(w / 2, 30), (w / 2, h - 16)]):
+        sh.stroke(d, 2.2, alpha=110, amp=0.3, taper=False)
+    sh.stroke(box, 3.2)
+    return sh.result()
+
+
+def spot(kind):
+    w, h = 104, 34
+    sh = Sheet(w, h, seed=1210)
+    sh.line = GUIDE_LINE
+    ring = ellipse_points(w / 2, h / 2, 44, 12)
+    if kind == 'on':
+        sh.wash(w / 2, h / 2, 44, 12, (246, 206, 92), alpha=230, layers=3, blur=2)
+    else:
+        sh.fill_poly(ring, (255, 255, 255), 120 if kind == 'ally' else 50)
+    a = {'ally': 210, 'on': 230, 'enemy': 110}[kind]
+    col = (214, 160, 52) if kind == 'on' else GUIDE_LINE
+    for d in _dashes(ring):
+        sh.stroke(d, 2.6, color=col, alpha=a, amp=0.3, taper=False)
+    return sh.result()
+
+
 def card_del(confirm):
     sh = Sheet(34, 34, seed=990 + confirm)
     sh.line = PLUM
@@ -243,6 +288,10 @@ def main():
     for i, (tid, label, tint) in enumerate(TABS):
         for on in (False, True):
             save(tab(i, label, tint, on), f'tab_{tid}{"_on" if on else ""}.png')
+    save(field(), 'field.png')
+    save(spot('ally'), 'spot.png')
+    save(spot('on'), 'spot_on.png')
+    save(spot('enemy'), 'spot_enemy.png')
     save(card_del(False), 'card_del.png')
     save(card_del(True), 'card_del_confirm.png')
     save(ink_wave(), 'ink_wave.png')
