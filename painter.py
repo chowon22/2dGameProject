@@ -17,7 +17,7 @@ COLORS = ('black', 'red', 'green', 'blue')
 ERASER = 'eraser'
 # 칠한 색 (수채화 느낌 팔레트, PRD 8.1). 저장한 PNG 를 다시 읽을 때 가장 가까운 색으로 되돌린다.
 RGB = {'black': (44, 38, 56), 'red': (222, 84, 96), 'green': (70, 170, 108), 'blue': (72, 124, 214)}
-PIXELS_PER_INK = 25   # 잉크 1 로 칠할 수 있는 픽셀 수 (수치는 미정 사항, 나중에 조정)
+PIXELS_PER_INK = 50   # 잉크 1 로 칠할 수 있는 픽셀 수 (수치는 미정 사항, 나중에 조정)
 BRUSH_R = 3.0         # 붓 반지름 (선 굵기 6px 남짓, PRD 8.1 선 굵기 3~5px 와 맞춤)
 ERASER_R = 9.0
 
