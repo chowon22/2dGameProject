@@ -1,10 +1,10 @@
 """유닛 그리기 화면(draw_mode) 이미지 생성 → image/draw/
 
 - panel: 화면을 덮는 커다란 수채화 종이 판
-- paper_person / paper_gear: 사람·무기를 그리는 흰 도화지 두 장
+- paper_<w>x<h>: 사람·무기를 그리는 흰 도화지 (체형·무기마다 크기가 달라 쓰이는 크기 전부)
 - body_<체형> / _on: 체형 고르기 칸 (작은·보통·큰)
 - card / card_on / card_empty: 프리셋(내가 그린 유닛) 카드
-- guide_person_<역할>_<체형> / guide_gear_<역할>: 두 종이에 깔리는 틀 밑그림 (frames.py) — 삐뚤빼뚤한 연필 점선
+- guide_person_<역할>_<체형> / guide_gear_<역할>_<무기 번호>_<체형>: 종이마다 깔리는 틀 밑그림 (frames.py) — 삐뚤빼뚤한 연필 점선
 - frame_<id> / frame_<id>_on: 틀 고르기 카드 (밑그림 + 이름)
 - ink_wave: 고른 잉크 아래 펜으로 쓱 그은 검정 밑줄, eraser: 지우개
 - tab_<all|틀 id> / _on: 내 유닛 화면의 프리셋 나누기 칸 (전체·탱커·근접 딜러·원거리 딜러·서포터)
@@ -63,10 +63,10 @@ def panel():
                 fill_alpha=236, line=4.0, r=30)
 
 
-def paper(pw):
-    """흰 도화지 한 장 (가운데 pw x PAPER_H 가 실제로 칠하는 곳)."""
-    w, h = pw + PAPER_MARGIN * 2, frames.PAPER_H + PAPER_MARGIN * 2
-    sh = Sheet(w, h, seed=910 + pw)
+def paper(pw, ph):
+    """흰 도화지 한 장 (가운데 pw x ph 가 실제로 칠하는 곳)."""
+    w, h = pw + PAPER_MARGIN * 2, ph + PAPER_MARGIN * 2
+    sh = Sheet(w, h, seed=910 + pw + ph)
     sh.line = PLUM
     # 살짝 기운 그림자 → 흰 도화지
     shadow = pastel.wobbly_box(10, 14, w - 4, h - 2, 10, sh.rng, amp=1.0)
@@ -125,9 +125,9 @@ def _dashes(points, keep=None):
     return [d for d in out if len(d) > 1]
 
 
-def guide(parts, details, w, seed, alpha=170, width=3.0, fill_alpha=22, color=GUIDE_LINE):
+def guide(parts, details, size, seed, alpha=170, width=3.0, fill_alpha=22, color=GUIDE_LINE):
     """틀 밑그림: 부위들을 합친 바깥 윤곽 + 무늬를 연필 점선으로, 안은 아주 옅게."""
-    h = frames.PAPER_H
+    w, h = size
     sh = Sheet(w, h, seed=seed)
     sh.line = color
     masks = []
@@ -160,14 +160,25 @@ def guide(parts, details, w, seed, alpha=170, width=3.0, fill_alpha=22, color=GU
 
 def person_guide(fid, body, **kw):
     f = frames.get(fid, body)
-    return guide(f['parts'], f['details'], frames.PERSON_W, 1100 + frames.IDS.index(fid) * 3 +
+    return guide(f['parts'], f['details'], f['size'], 1100 + frames.IDS.index(fid) * 3 + frames.BODIES.index(body),
+                 **kw)
+
+
+def gear_guide(fid, i, body, **kw):
+    g = frames.get(fid, body)['gear'][i]
+    return guide(g['parts'], g['details'], g['size'], 1150 + frames.IDS.index(fid) * 9 + i * 3 +
                  frames.BODIES.index(body), **kw)
 
 
-def gear_guide(fid, **kw):
-    gear = frames.get(fid)['gear']
-    return guide([p for g in gear for p in g['parts']], [d for g in gear for d in g['details']], frames.GEAR_W,
-                 1150 + frames.IDS.index(fid), **kw)
+def paper_sizes():
+    """쓰이는 종이 크기 전부 (사람·무기, 체형마다)."""
+    sizes = set()
+    for fid in frames.IDS:
+        for body in frames.BODIES:
+            f = frames.get(fid, body)
+            sizes.add(f['size'])
+            sizes.update(g['size'] for g in f['gear'])
+    return sorted(sizes)
 
 
 def frame_card(frame, on):
@@ -178,11 +189,14 @@ def frame_card(frame, on):
     # 왼쪽에 작은 틀 실루엣
     # 아이콘: 사람 밑그림 옆에 무기 밑그림 (종이 두 장을 붙인 모양)
     kw = dict(alpha=255, width=6.0, fill_alpha=80 if on else 50, color=PLUM)
-    pg, gg = person_guide(frame['id'], 'medium', **kw), gear_guide(frame['id'], **kw)
-    pg, gg = pg.crop(pg.getbbox()), gg.crop(gg.getbbox())
-    g = Image.new('RGBA', (pg.width + 14 + gg.width, max(pg.height, gg.height)), (0, 0, 0, 0))
-    g.alpha_composite(pg, (0, g.height - pg.height))
-    g.alpha_composite(gg, (pg.width + 14, (g.height - gg.height) // 2))
+    sheets = [person_guide(frame['id'], 'medium', **kw)] +         [gear_guide(frame['id'], i, 'medium', **kw) for i in range(len(frames.get(frame['id'])['gear']))]
+    sheets = [im.crop(im.getbbox()) for im in sheets]
+    g = Image.new('RGBA', (sum(im.width for im in sheets) + 14 * (len(sheets) - 1), max(im.height for im in sheets)),
+                  (0, 0, 0, 0))
+    x = 0
+    for im in sheets:
+        g.alpha_composite(im, (x, (g.height - im.height) // 2 if x else g.height - im.height))
+        x += im.width + 14
     k = min(62 / g.width, 64 / g.height)   # 아이콘 칸 62px, 나머지는 이름 칸
     icon = g.resize((round(g.width * k), round(g.height * k)), Image.LANCZOS)
     img.alpha_composite(icon, (16 + (62 - icon.width) // 2, (h - icon.height) // 2))
@@ -300,14 +314,15 @@ BUTTONS = (  # 파일 이름, 글씨, 색, 크기
 
 def main():
     save(panel(), 'panel.png')
-    save(paper(frames.PERSON_W), 'paper_person.png')
-    save(paper(frames.GEAR_W), 'paper_gear.png')
+    for w, h in paper_sizes():
+        save(paper(w, h), f'paper_{w}x{h}.png')
     for state in ('off', 'on', 'empty'):
         save(card(state), {'off': 'card.png', 'on': 'card_on.png', 'empty': 'card_empty.png'}[state])
     for f in frames.FRAMES:
         for body in frames.BODIES:
             save(person_guide(f['id'], body), f'guide_person_{f["id"]}_{body}.png')
-        save(gear_guide(f['id']), f'guide_gear_{f["id"]}.png')
+            for i in range(len(frames.get(f['id'], body)['gear'])):
+                save(gear_guide(f['id'], i, body), f'guide_gear_{f["id"]}_{i}_{body}.png')
         for on in (False, True):
             save(frame_card(f, on), f'frame_{f["id"]}{"_on" if on else ""}.png')
     for i, (tid, label, tint) in enumerate(TABS):
