@@ -14,7 +14,8 @@
   × 를 두 번 누르면 프리셋을 지운다
 - 다 빼기 / 닫기, ESC 닫기
 - 전투에서 다친 유닛은 반투명한 채로 남는다 (남은 체력 % 표시, 쓰러지면 '쓰러짐').
-  치료하기: 검정 잉크를 써서 다친 유닛을 모두 가득 치료한다. 흐려진 만큼 다시 칠하는 셈이라
+  치료하기: 검정 잉크를 써서 가득 치료한다. 다친 유닛 자리를 골라 두면 그 유닛만, 아니면 다친 유닛 모두.
+  흐려진 만큼 다시 칠하는 셈이라
   드는 잉크 = 그 유닛을 그린 잉크 x 잃은 체력 비율 (1 짜리 유닛은 많아야 1)
 출전 준비 (월드 화면에서 스테이지를 누르면 stage_id 를 정하고 띄운다):
 - 적 자리에 그 스테이지의 몬스터가 서 있고, 우리 전투력 vs 적 예상 전투력이 뜬다
@@ -189,24 +190,35 @@ def close():
     game_framework.pop_mode()
 
 
-def heal_cost():
-    """다친 유닛을 모두 가득 치료하는 데 드는 검정 잉크: 흐려진 만큼 다시 칠한다고 쳐서
+def heal_targets():
+    """치료할 자리들: 다친 유닛 자리를 골라 두었으면 그 하나, 아니면 다친 유닛 모두."""
+    hurt = save_data.hurt_slots(data()) if data() else []
+    return [selected] if selected in hurt else hurt
+
+
+def heal_cost(slots=None):
+    """slots(기본: heal_targets) 유닛을 가득 치료하는 데 드는 검정 잉크: 흐려진 만큼 다시 칠한다고 쳐서
     유닛마다 (그린 잉크 x 잃은 체력 비율) 의 합. 다친 유닛이 있으면 적어도 1."""
     total = 0.0
-    for s in save_data.hurt_slots(data()):
+    for s in heal_targets() if slots is None else slots:
         unit = save_data.find_unit(data(), data()['party'][s])
         drawn = sum(unit.get('ink', {}).values())
         total += drawn * (1 - save_data.hp_list(data())[s]) * HEAL_RATE
     return max(1, math.ceil(total)) if total > 0 else 0
 
 
-def heal_all():
-    slots = save_data.hurt_slots(data()) if data() else []
+def heal_picked():
+    """치료하기 버튼: 고른 다친 유닛 하나, 고른 게 없으면 다친 유닛 모두."""
+    global selected
+    slots = heal_targets()
     if not slots:
         say('다친 유닛이 없어요')
         return
-    if save_data.heal(data(), slots, heal_cost()):
-        say('모두 나았어요!')
+    one = len(slots) == 1 and selected in slots
+    if save_data.heal(data(), slots, heal_cost(slots)):
+        say('다 나았어요!' if one else '모두 나았어요!')
+        if one:
+            selected = None
     else:
         say('검정 잉크가 모자라요')
 
@@ -241,7 +253,7 @@ def init():
                Button(1150, 70, 'button_close.png', 'button_close_hover.png', close, 0.4, 'draw')]
     if stage_id:
         buttons.append(Button(1130, 392, 'button_start.png', 'button_start_hover.png', start_battle, 0.6, 'world'))
-    heal_button = Button(112, 510, 'button_heal.png', 'button_heal_hover.png', heal_all, 0.9, 'world')
+    heal_button = Button(112, 510, 'button_heal.png', 'button_heal_hover.png', heal_picked, 0.9, 'world')
     if data():   # 지워진 프리셋 자리는 비운다
         data()['party'] = save_data.normalize_party(data()['party'], data()['units'])
     row0 = 0
@@ -458,7 +470,11 @@ def draw_heal():
     if not data() or not save_data.hurt_slots(data()):
         return
     heal_button.draw()
-    text.draw(f'검정 {heal_cost()} 써요', 112, 462, 20, SOFT, 'c')
+    one = selected in save_data.hurt_slots(data())
+    text.draw('고른 유닛만' if one else '다친 유닛 모두', 112, 462, 20, INK, 'c')
+    text.draw(f'검정 {heal_cost()} 써요', 112, 436, 20, SOFT, 'c')
+    if not one and len(save_data.hurt_slots(data())) > 1:
+        text.draw('자리를 고르면 하나만', 112, 410, 18, SOFT, 'c')
 
 
 def draw_ink():
