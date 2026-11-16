@@ -14,7 +14,8 @@
   × 를 두 번 누르면 프리셋을 지운다
 - 다 빼기 / 닫기, ESC 닫기
 - 전투에서 다친 유닛은 반투명한 채로 남는다 (남은 체력 % 표시, 쓰러지면 '쓰러짐').
-  치료하기: 검정 잉크를 써서 다친 유닛을 모두 가득 치료한다 (모자란 체력 HEAL_INK 당 잉크 1)
+  치료하기: 검정 잉크를 써서 다친 유닛을 모두 가득 치료한다. 흐려진 만큼 다시 칠하는 셈이라
+  드는 잉크 = 그 유닛을 그린 잉크 x 잃은 체력 비율 (1 짜리 유닛은 많아야 1)
 출전 준비 (월드 화면에서 스테이지를 누르면 stage_id 를 정하고 띄운다):
 - 적 자리에 그 스테이지의 몬스터가 서 있고, 우리 전투력 vs 적 예상 전투력이 뜬다
 - 시작! 을 누르면 전투(battle_mode)로
@@ -53,7 +54,7 @@ LANE_SKEW = (56, 0, -56)                  # 먼 줄은 오른쪽으로 (비스�
 FRONT_X, BACK_X = 476, 316
 FIGURE_SCALE = 0.2                        # 자리에 서 있는 그림 배율 (체형마다 크기가 다르게 보이도록 모두 같은 배율)
 SPOT_W, SPOT_TOP = 48, 50                 # 자리 누르는 범위: 가로 ±48, 발 아래 16 ~ 위 50
-HEAL_INK = 0.5                            # 치료: 모자란 체력 1 마다 검정 잉크 0.5
+HEAL_RATE = 1.0                           # 치료: 그 유닛을 그린 잉크 x 잃은 체력 비율 x 이 배율 (검정으로)
 DOUBLE_CLICK = 0.4                        # 이 시간(초) 안에 같은 유닛을 두 번 누르면 자리에서 뺀다
 
 INK_X, INK_TOP = 1010, 668
@@ -189,12 +190,14 @@ def close():
 
 
 def heal_cost():
-    """다친 유닛을 모두 가득 치료하는 데 드는 검정 잉크."""
-    missing = 0.0
+    """다친 유닛을 모두 가득 치료하는 데 드는 검정 잉크: 흐려진 만큼 다시 칠한다고 쳐서
+    유닛마다 (그린 잉크 x 잃은 체력 비율) 의 합. 다친 유닛이 있으면 적어도 1."""
+    total = 0.0
     for s in save_data.hurt_slots(data()):
         unit = save_data.find_unit(data(), data()['party'][s])
-        missing += (1 - save_data.hp_list(data())[s]) * stats.unit_stats(unit)['hp']
-    return math.ceil(missing * HEAL_INK)
+        drawn = sum(unit.get('ink', {}).values())
+        total += drawn * (1 - save_data.hp_list(data())[s]) * HEAL_RATE
+    return max(1, math.ceil(total)) if total > 0 else 0
 
 
 def heal_all():
