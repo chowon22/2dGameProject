@@ -50,6 +50,7 @@ def blank(slot, now=None):
         'ink': {'black': START_INK, 'red': 0, 'green': 0, 'blue': 0},
         'units': [],          # 그린 유닛 (프리셋): {'id', 'frame', 'body', 'counts', 'ink'} — 그림은 unit_path·gear_path
         'party': [None] * PARTY_MAX,  # 내 유닛: 필드 자리마다 놓은 프리셋 id (빈 자리 None, 같은 id 여러 번 가능)
+        'cleared': [],        # 깬 스테이지 ('0-1' …)
     }
 
 

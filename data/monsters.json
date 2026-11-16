@@ -1,0 +1,31 @@
+{
+  "carrier_red": {
+    "name": "빨강 운반자",
+    "image": ["cutscene", "carrier_red.png"],
+    "element": "fire",
+    "hp": 30, "atk": 5,
+    "drop": {"red": 20}
+  },
+  "carrier_green": {
+    "name": "초록 운반자",
+    "image": ["cutscene", "carrier_green.png"],
+    "element": "grass",
+    "hp": 34, "atk": 4,
+    "drop": {"green": 20}
+  },
+  "carrier_blue": {
+    "name": "파랑 운반자",
+    "image": ["cutscene", "carrier_blue.png"],
+    "element": "water",
+    "hp": 28, "atk": 6,
+    "drop": {"blue": 20}
+  },
+  "carrier_big": {
+    "name": "커다란 운반자",
+    "image": ["cutscene", "carrier_red.png"],
+    "scale": 1.5,
+    "element": "fire",
+    "hp": 140, "atk": 9,
+    "drop": {"red": 60, "black": 60}
+  }
+}
