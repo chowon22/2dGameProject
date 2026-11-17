@@ -12,7 +12,7 @@
 - 내 프리셋 (아래): 전체 / 탱커 / 근접 딜러 / 원거리 딜러 / 서포터 칸으로 나눠 본다. 지금 놓을 수 없는 카드는 흐리게.
   같은 프리셋을 여러 번 놓을 수 있다. 많으면 마우스 휠로 넘긴다. 카드에 마우스를 올리면 드는 잉크가 뜨고,
   × 를 두 번 누르면 프리셋을 지운다
-- 다 빼기 / 닫기, ESC 닫기
+- 다 빼기 / 닫기, ESC 닫기. 누르는 곳마다 물감이 톡 튄다 (들어올 때도 누른 자리에서)
 - 전투에서 다친 유닛은 반투명한 채로 남는다 (남은 체력 % 표시, 쓰러지면 '쓰러짐').
   치료하기: 고른 다친 유닛 하나를, 전체 치료하기: 다친 유닛 모두를 가득 치료한다. 버튼 아래에 드는 잉크 (병 + 숫자).
   흐려진 만큼 다시 칠하는 셈이라 색마다 드는 잉크 = 그 유닛을 그린 그 색 잉크 x 잃은 체력 비율 (save_data.heal_cost)
@@ -38,6 +38,7 @@ import text
 import title_mode
 import unit_cards
 from assets import image
+from title_effects import InkSplash
 from ui_button import Button
 
 W, H = 1280, 720
@@ -85,6 +86,7 @@ dragging = False                 # 누른 채 DRAG_START 넘게 움직였으면 
 DRAG_START = 6
 toast = None
 t = 0.0
+splashes = []                    # 누른 자리에 튄 물감
 
 
 # ---------------------------------------------------------------- 자리 계산
@@ -259,6 +261,7 @@ def init():
     dragging = False
     toast = None
     t = 0.0
+    splashes[:] = [InkSplash(*title_mode.mouse)]   # 내 유닛·스테이지를 누른 자리에서 물감이 튄다
     title_mode.move_mouse(title_mode.mouse)
 
 
@@ -375,6 +378,7 @@ def handle_events():
             mouse_move(*title_mode.to_canvas(event))
         elif event.type == SDL_MOUSEBUTTONDOWN and event.button == SDL_BUTTON_LEFT:
             if t > FADE_IN:
+                splashes.append(InkSplash(*title_mode.to_canvas(event)))
                 press_down(*title_mode.to_canvas(event))
         elif event.type == SDL_MOUSEBUTTONUP and event.button == SDL_BUTTON_LEFT:
             release(*title_mode.to_canvas(event))
@@ -388,6 +392,9 @@ def update():
     t += dt
     for b in buttons + heal_buttons:
         b.update()
+    for s in splashes:
+        s.update()
+    splashes[:] = [s for s in splashes if not s.done][-12:]
     title_mode.trail.update()
     if toast:
         toast = (toast[0], toast[1] - dt) if toast[1] > dt else None
@@ -544,6 +551,8 @@ def draw():
         b.draw()
     if not dragging:
         unit_cards.draw_tip(deleter.hover, visible())   # 마우스를 올린 카드: 드는 잉크
+    for s in splashes:
+        s.draw()
     draw_dragged()
     draw_toast()
     if t < FADE_IN:

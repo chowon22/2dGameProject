@@ -1,7 +1,8 @@
 """능력치를 한눈에: 막대 그래프 (유닛 그리기 화면 오른쪽) 와 한 줄 글씨 (카드 쪽지).
 
 막대 한 줄 = 이름 · 막대 · 숫자. 막대는 기본 능력치(검정 100) 의 두 배까지 채워지고,
-가운데 세로 눈금이 기본 자리 (눈금을 넘으면 기본보다 세다). 숫자는 '지금 / 기본'.
+가운데 굵은 눈금이 기본 자리 (눈금을 넘으면 기본보다 세다). 숫자는 '지금 / 기본'.
+채워진 칸은 롤 체력바처럼 일정 간격(segment_step)마다 가는 금으로 나뉜다 — 칸 수로 크기를 가늠한다.
 원소 줄은 가장 많이 칠한 색의 잉크병 + 원소 이름 + 상성 세기 막대 (stats.strength, 칠할수록 세다).
 open_canvas() 뒤에만 쓸 수 있다.
 """
@@ -15,19 +16,39 @@ from assets import image
 INK = (86, 68, 106)
 SOFT = (150, 128, 170)
 TRACK = (240, 234, 244)
-BAR_H = 14
+BAR_H = 16
+STEPS = (1, 2, 5, 10, 20, 50, 100, 200, 500)
+MAX_SEGMENTS = 20
 COLORS = {'hp': (232, 112, 124), 'atk': (240, 168, 80), 'buff': (110, 188, 140)}
 LABELS = {'hp': '체력', 'atk': '공격력', 'buff': '버프'}
 ELEMENT_INK = {v: k for k, v in stats.ELEMENT_OF.items()}   # 원소 → 잉크 색
 
 
-def _bar(x, y, w, frac, color, tick=None):
-    """(x, y) 왼쪽 가운데부터 폭 w 막대. frac 0~1 만큼 채우고 tick(0~1) 자리에 세로 눈금."""
+def segment_step(top):
+    """막대 끝 값 top 을 MAX_SEGMENTS 칸 안으로 나누는 깔끔한 간격 (1, 2, 5, 10 …)."""
+    return next((s for s in STEPS if top / s <= MAX_SEGMENTS), STEPS[-1])
+
+
+def _shade(color, k=0.72):
+    return tuple(int(c * k) for c in color)
+
+
+def _bar(x, y, w, frac, color, tick=None, step=None):
+    """(x, y) 왼쪽 가운데부터 폭 w 막대. frac 0~1 만큼 채우고, 채운 곳은 step(0~1 비율)마다 금을 긋고,
+    tick(0~1) 자리에 굵은 세로 눈금."""
     frac = max(0.0, min(1.0, frac))
     y1, y2 = y - BAR_H / 2, y + BAR_H / 2
     draw_rectangle(x, y1, x + w, y2, *TRACK, filled=True)
     if frac > 0:
-        draw_rectangle(x + 2, y1 + 2, x + 2 + (w - 4) * frac, y2 - 2, *color, filled=True)
+        fx = x + 2 + (w - 4) * frac
+        draw_rectangle(x + 2, y1 + 2, fx, y2 - 2, *color, filled=True)
+        draw_rectangle(x + 2, y1 + 2, fx, y1 + 4, *_shade(color, 0.85), filled=True)   # 아래쪽 그늘
+        if step:
+            k = step
+            while k < frac - 1e-6:
+                sx = x + 2 + (w - 4) * k
+                draw_rectangle(sx - 0.5, y1 + 2, sx + 0.5, y2 - 2, *_shade(color), filled=True)
+                k += step
     draw_rectangle(x, y1, x + w, y2, *INK, filled=False)
     if tick is not None:
         tx = x + w * tick
@@ -38,14 +59,14 @@ def _num(v):
     return f'{v:g}'
 
 
-def draw_bars(now, base, x, y, w=220, gap=30, label_w=58, show_buff=False):
+def draw_bars(now, base, x, y, w=220, gap=40, label_w=58, show_buff=False):
     """now·base = stats.unit_stats 결과. (x, y) 는 첫 줄 이름의 왼쪽 가운데. 다음 줄 y 를 돌려준다."""
     keys = ('hp', 'atk') + (('buff',) if show_buff else ())
     bx = x + label_w
     for k in keys:
         text.draw(LABELS[k], x, y, 20, INK)
         top = base[k] * 2 or 1
-        _bar(bx, y, w, now[k] / top, COLORS[k], tick=0.5)
+        _bar(bx, y, w, now[k] / top, COLORS[k], tick=0.5, step=segment_step(top) / top)
         text.draw(f'{_num(now[k])} / {_num(base[k])}', bx + w + 10, y - 1, 18, SOFT)
         y -= gap
     text.draw('원소', x, y, 20, INK)

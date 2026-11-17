@@ -1,6 +1,6 @@
 """그린 유닛(프리셋) 카드 한 장 그리기. 유닛 그리기 화면과 내 유닛 화면이 함께 쓴다.
 
-카드 = 쪽지 + 무기를 손에 쥔 그림(unit_art.compose)을 잘라 줄인 썸네일 + 체형·틀 이름.
+카드 = 쪽지 + 무기를 손에 쥔 그림(unit_art.compose)을 잘라 줄인 썸네일 + 역할 마크 (작은·큰 체형은 옆에 글씨).
 드는 잉크와 능력치는 카드에 마우스를 올렸을 때만 카드 아래 쪽지로 보인다 (draw_tip) — 색이 많아져도 잘리지 않게.
 draw_mark: 유닛 발밑 등에 붙이는 역할 마크 (탱커 방패 / 근딜 칼 / 원딜 활 / 서포터 치료 십자, tools/gen_marks.py).
 카드에 마우스를 올리면 오른쪽 위 모서리에 지우기 × 도 뜬다. 한 번 누르면 붉게 바뀌고, 한 번 더 누르면 지운다 (Deleter).
@@ -118,7 +118,12 @@ def draw(unit, x, y, on=False, alpha=1.0, delete=None):
     img = thumb(unit)
     if img:
         _draw(img, x, y + 9, alpha)
-    text.draw(label(unit), x, y - 21, 15, INK, 'c', alpha=alpha)   # 쪽지 테두리(가운데에서 34px) 안쪽
+    body = unit.get('body', 'medium')
+    if body != 'medium':   # 이름 대신 역할 마크, 작은·큰 체형만 옆에 짧게
+        draw_mark(unit, x - 12, y - 22, 26, alpha)
+        text.draw(frames.BODY_NAMES.get(body, ''), x + 4, y - 22, 14, INK, 'l', alpha=alpha)
+    else:
+        draw_mark(unit, x, y - 22, 26, alpha)
     if delete:
         image('draw', 'card_del_confirm.png' if delete == 'confirm' else 'card_del.png').draw(x + DEL_DX, y + DEL_DY)
 

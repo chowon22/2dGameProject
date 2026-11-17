@@ -14,6 +14,8 @@
 오른쪽: 이 틀·체형의 기본 능력치(검정 100) · 지금 그림의 능력치 · 드는 잉크,
   되돌리기 / 다 지우기 / 저장하기(프리셋에 더하고 드는 잉크를 적어 둔다) / 닫기
 
+종이 밖을 누르면 물감이 톡 튄다 (들어올 때도 누른 자리에서). 종이 위는 그린 선과 헷갈리지 않게 튀지 않는다.
+
 키: 1~4 잉크, E 지우개, Ctrl+Z 되돌리기, ESC 닫기
 """
 import numpy as np
@@ -35,6 +37,7 @@ import unit_art
 import unit_cards
 from assets import image
 from live_image import LiveImage
+from title_effects import InkSplash
 from ui_button import Button
 
 W, H = 1280, 720
@@ -111,6 +114,7 @@ painting = None         # 붓질 중인 종이 번호
 deleter = None
 toast = None
 t = 0.0
+splashes = []           # 누른 자리에 튄 물감 (종이 밖만)
 
 
 # ---------------------------------------------------------------- 자리 계산
@@ -291,13 +295,14 @@ def init():
     # 오른쪽 두 칸: 위 줄 되돌리기·다 지우기, 아래 줄 저장하기·닫기
     buttons = [Button(x, y, f'button_{name}.png', f'button_{name}_hover.png', action, 0.3 * i, 'draw')
                for i, (name, x, y, action) in enumerate((
-                   ('undo', SIDE_L, 222, undo), ('clear', SIDE_R, 222, clear_paper),
-                   ('save', SIDE_L, 130, save_unit), ('close', SIDE_R, 130, close)))]
+                   ('undo', SIDE_L, 196, undo), ('clear', SIDE_R, 196, clear_paper),
+                   ('save', SIDE_L, 108, save_unit), ('close', SIDE_R, 108, close)))]
     tool = 'black'
     picked = painting = None
     deleter = unit_cards.Deleter()
     toast = None
     t = 0.0
+    splashes[:] = [] if sheet_at(*title_mode.mouse) is not None else [InkSplash(*title_mode.mouse)]   # 유닛 추가하기를 누른 자리에서
     title_mode.move_mouse(title_mode.mouse)
 
 
@@ -384,7 +389,10 @@ def handle_events():
                 sheets[painting].paper.drag(*sheets[painting].local(mx, my, clamp=True), tool)
         elif event.type == SDL_MOUSEBUTTONDOWN and event.button == SDL_BUTTON_LEFT:
             if t > FADE_IN:
-                click(*title_mode.to_canvas(event))
+                mx, my = title_mode.to_canvas(event)
+                if sheet_at(mx, my) is None:
+                    splashes.append(InkSplash(mx, my))
+                click(mx, my)
         elif event.type == SDL_MOUSEBUTTONUP and event.button == SDL_BUTTON_LEFT:
             if painting is not None:
                 sheets[painting].paper.end()
@@ -397,6 +405,9 @@ def update():
     t += dt
     for b in buttons:
         b.update()
+    for s in splashes:
+        s.update()
+    splashes[:] = [s for s in splashes if not s.done][-12:]
     title_mode.trail.update()
     if toast:
         toast = (toast[0], toast[1] - dt) if toast[1] > dt else None
@@ -488,14 +499,14 @@ def draw_side():
     base = stats.unit_stats({'frame': frame_id, 'body': body, 'ink': {'black': 100 * stats.INK_PER_PERCENT}})
     now = stats.unit_stats({'frame': frame_id, 'body': body, 'ink': used, 'counts': counts()})
     y = stat_view.draw_bars(now, base, STAT_X, 422, show_buff=frame_id == 'support')
-    text.draw('막대 가운데 눈금 = 기본 (검정 100)', STAT_X, y + 6, 16, SOFT)
+    text.draw('굵은 눈금 = 기본 (검정 100)', STAT_X, y + 12, 16, SOFT)
     x = STAT_X   # 드는 잉크: 병 + 숫자
     for c in painter.COLORS:
         if used[c]:
-            ink_icons[c].draw(x + 8, y - 22, 16, 19)
-            text.draw(str(used[c]), x + 20, y - 23, 20, INK)
+            ink_icons[c].draw(x + 8, y - 14, 16, 19)
+            text.draw(str(used[c]), x + 20, y - 15, 20, INK)
             x += 34 + 11 * len(str(used[c]))
-    text.draw('Ctrl+Z 로도 되돌려요', SIDE_X, 70, 20, (150, 128, 170), 'c')
+    text.draw('Ctrl+Z 로도 되돌려요', SIDE_X, 46, 20, (150, 128, 170), 'c')
 
 
 def draw_toast():
@@ -520,6 +531,8 @@ def draw():
     draw_papers()
     draw_side()
     unit_cards.draw_tip(deleter.hover, preset_cards())   # 마우스를 올린 카드: 드는 잉크
+    for s in splashes:
+        s.draw()
     draw_toast()
     if t < FADE_IN:
         fade.opacify(0.5 * (1 - t / FADE_IN))
