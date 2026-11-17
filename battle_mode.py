@@ -101,7 +101,8 @@ def make_views():
         f.hp = 0 if frac <= 0 else max(1, round(f.max_hp * frac))
         allies.append(f)
         x, y = spot('ally', slot)
-        views.append({'f': f, 'x': x, 'y': y, 'rig': unit_rig.rig(unit, UNIT_SCALE), 'name': unit_cards.label(unit),
+        name = save_data.slot_name(data, slot) or unit_cards.label(unit)   # 자리 이름 → 프리셋 이름 → 역할
+        views.append({'f': f, 'x': x, 'y': y, 'rig': unit_rig.rig(unit, UNIT_SCALE), 'name': name,
                       'dead_t': 0.0})
     for e in stages.enemies(stage_id):
         f = battle.Fighter('enemy', e['slot'], e, e)

@@ -12,7 +12,7 @@
   무기 종이는 통째로 한 덩어리라 네모 전체에 그릴 수 있다.
   들어오자마자 바로 그릴 수 있고, 붓질은 시작한 종이 안에서만 칠해진다. 커서 자리에 지금 붓 색·굵기의 점이 보인다.
   가진 잉크와 상관없이 어떤 색이든 마음껏 칠한다 (잉크는 내 유닛에서 놓을 때 따진다)
-오른쪽: 이 틀·체형의 기본 능력치(검정 100) · 지금 그림의 능력치 · 드는 잉크,
+오른쪽: 이름 칸 (프리셋 기본 이름, 비우면 역할 이름), 이 틀·체형의 기본 능력치(검정 100) · 지금 그림의 능력치 · 드는 잉크,
   되돌리기 / 다 지우기 / 저장하기(프리셋에 더하고 드는 잉크를 적어 둔다) / 닫기
 
 종이 밖을 누르면 물감이 톡 튄다 (들어올 때도 누른 자리에서). 종이 위는 그린 선과 헷갈리지 않게 튀지 않는다.
@@ -20,13 +20,14 @@
 키: 1~4 잉크, E 지우개, Ctrl+Z 되돌리기, ESC 닫기
 """
 import numpy as np
-from pico2d import (clear_canvas, update_canvas, get_events,
+from pico2d import (clear_canvas, update_canvas,
                     SDL_QUIT, SDL_KEYDOWN, SDL_MOUSEMOTION, SDL_MOUSEBUTTONDOWN, SDL_MOUSEBUTTONUP, SDL_BUTTON_LEFT,
                     SDLK_ESCAPE, SDLK_1, SDLK_4, SDLK_e, SDLK_z)
 from sdl2 import SDL_GetModState, KMOD_CTRL, SDL_MOUSEWHEEL
 
 import frames
 import game_framework
+import name_field
 import painter
 import prepare_mode
 import save_data
@@ -62,6 +63,7 @@ SHEET_GAP = 30
 SIDE_X = 1040                   # 오른쪽 칸 가운데
 SIDE_L, SIDE_R = 940, 1140      # 오른쪽 버튼 두 줄
 STAT_X = 856                    # 능력치 막대 줄 왼쪽
+NAME_Y = 216                    # 이름 칸 y
 TOOLS = painter.COLORS + (painter.ERASER,)
 OUTSIDE = (196, 184, 210, 120)  # 칠할 수 없는 자리를 덮는 옅은 보라
 NAMES = {'black': '검정', 'red': '빨강', 'green': '초록', 'blue': '파랑'}
@@ -113,6 +115,7 @@ body = 'medium'
 tool = 'black'
 picked = None           # 지금 종이에 올린 프리셋 id
 preset_first = None     # 프리셋 줄 맨 앞 번호 (None = 가장 최근 것들이 보이게 맨 끝)
+name = None             # 이름 칸 (name_field.NameField)
 painting = None         # 붓질 중인 종이 번호
 deleter = None
 toast = None
@@ -251,6 +254,8 @@ def pick_preset(unit):
         s.paper.load_rgba(rgba)
         s.paper.history.clear()
     picked = unit['id']
+    name.stop()
+    name.value = unit.get('name', '')   # 불러온 프리셋 이름 (고쳐서 저장하면 새 프리셋 이름)
 
 
 def save_unit():
@@ -260,7 +265,9 @@ def save_unit():
     if all(s.paper.is_empty() for s in sheets):
         say('아직 아무것도 그리지 않았어요')
         return
-    unit = save_data.add_unit(save_data.current, frame_id, counts(), ink_used(), body=body)
+    name.stop()
+    unit = save_data.add_unit(save_data.current, frame_id, counts(), ink_used(), body=body, name=name.value)
+    name.value = ''
     slot = save_data.current['slot']
     sheets[0].paper.save_png(save_data.unit_path(slot, unit['id']))
     for i, s in enumerate(sheets[1:]):
@@ -297,7 +304,8 @@ def close():
 # ---------------------------------------------------------------- 모드
 def init():
     global panel, ink_wave, eraser_img, fade, toast_img, frame_imgs, body_imgs, ink_icons
-    global brush_tips, buttons, sheets, edits, tool, picked, painting, deleter, toast, t, preset_first
+    global brush_tips, buttons, sheets, edits, tool, picked, painting, deleter, toast, t, preset_first, name
+    name = name_field.NameField(STAT_X + 58, NAME_Y, 220)
     panel = image('draw', 'panel.png')
     ink_wave = image('draw', 'ink_wave.png')
     eraser_img = image('draw', 'eraser.png')
@@ -316,8 +324,8 @@ def init():
     # 오른쪽 두 칸: 위 줄 되돌리기·다 지우기, 아래 줄 저장하기·닫기
     buttons = [Button(x, y, f'button_{name}.png', f'button_{name}_hover.png', action, 0.3 * i, 'draw')
                for i, (name, x, y, action) in enumerate((
-                   ('undo', SIDE_L, 196, undo), ('clear', SIDE_R, 196, clear_paper),
-                   ('save', SIDE_L, 108, save_unit), ('close', SIDE_R, 108, close)))]
+                   ('undo', SIDE_L, 160, undo), ('clear', SIDE_R, 160, clear_paper),
+                   ('save', SIDE_L, 78, save_unit), ('close', SIDE_R, 78, close)))]
     tool = 'black'
     picked = painting = preset_first = None
     deleter = unit_cards.Deleter()
@@ -328,6 +336,7 @@ def init():
 
 
 def finish():
+    name.stop()   # 글자 입력을 끈다 (단축키가 다시 먹게)
     save_data.save_current()
 
 
@@ -350,6 +359,8 @@ def move_mouse(pos):
 
 def click(mx, my):
     global painting, picked
+    if name.click(mx, my):   # 칸 밖을 누르면 적기를 끝낸다
+        return
     if any(b.click(mx, my) for b in buttons):
         return
     for x, d in ((ARROW_L, -MAX_PRESETS), (ARROW_R, MAX_PRESETS)):
@@ -390,7 +401,9 @@ def click(mx, my):
 
 def handle_events():
     global painting
-    for event in get_events():
+    for event in name_field.get_events():
+        if name.handle(event):   # 이름을 적는 중이면 글자·Enter·Esc 는 이름 칸으로
+            continue
         if event.type == SDL_QUIT:
             game_framework.quit()
         elif event.type == SDL_KEYDOWN:
@@ -432,6 +445,7 @@ def update():
     global t, toast
     dt = game_framework.frame_time
     t += dt
+    name.update(dt)
     for b in buttons:
         b.update()
     for s in splashes:
@@ -542,7 +556,9 @@ def draw_side():
             ink_icons[c].draw(x + 8, y - 14, 16, 19)
             text.draw(str(used[c]), x + 20, y - 15, 20, INK)
             x += 34 + 11 * len(str(used[c]))
-    text.draw('되돌리기: Ctrl+Z', SIDE_X, 46, 20, (150, 128, 170), 'c')
+    text.draw('이름', STAT_X, NAME_Y, 20, INK)
+    name.draw(frames.get(frame_id, body)['name'])
+    text.draw('되돌리기: Ctrl+Z', SIDE_X, 30, 18, (150, 128, 170), 'c')
 
 
 def draw_toast():

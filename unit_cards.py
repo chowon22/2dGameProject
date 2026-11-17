@@ -56,7 +56,9 @@ def cost(unit):
 
 
 def label(unit):
-    """카드 아래 이름: 체형 + 틀 (예: '큰 탱커')."""
+    """유닛 이름: 정해 둔 이름, 없으면 체형 + 틀 (예: '큰 탱커')."""
+    if unit.get('name'):
+        return unit['name']
     if unit.get('frame') not in frames.IDS:
         return ''
     body = unit.get('body', 'medium')
@@ -73,14 +75,16 @@ def draw_tip(unit_id, cards):
         ink = {c: n for c, n in unit.get('ink', {}).items() if n}
         msg = '  ·  '.join(f'{NAMES.get(c, c)} {n}' for c, n in ink.items()) or '잉크 0'
         st = stat_view.tip_line(unit)
-        w = max(140, 13 * max(len(msg), len(st)) + 48)
+        title = label(unit)
+        w = max(140, 13 * max(len(msg), len(st), len(title) * 2) + 48)
         note = image('prepare', 'toast.png')
-        tx, ty = x, y - CARD_H / 2 - 32   # 카드 바로 아래: 위 줄 드는 잉크, 아래 줄 능력치
-        if ty < 44:                       # 화면 아래로 잘리면 카드 위에
-            ty = y + CARD_H / 2 + 32
-        note.draw(tx, ty, w, 78)
-        text.draw(msg, tx, ty + 12, 20, INK, 'c')
-        text.draw(st, tx, ty - 13, 18, (150, 128, 170), 'c')
+        tx, ty = x, y - CARD_H / 2 - 44   # 카드 바로 아래: 이름 · 드는 잉크 · 능력치
+        if ty < 56:                       # 화면 아래로 잘리면 카드 위에
+            ty = y + CARD_H / 2 + 44
+        note.draw(tx, ty, w, 104)
+        text.draw(title, tx, ty + 24, 22, INK, 'c')
+        text.draw(msg, tx, ty, 18, INK, 'c')
+        text.draw(st, tx, ty - 23, 18, (150, 128, 170), 'c')
         return
 
 

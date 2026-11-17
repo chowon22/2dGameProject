@@ -8,6 +8,7 @@
   · 놓인 유닛을 두 번 빠르게 누르면(더블클릭) 자리에서 뺀다
   · 끌어 놓기: 놓인 유닛을 다른 자리로 끌면 옮기기·맞바꾸기, 프리셋 카드를 자리로 끌면 그 자리에 놓기.
     자리 밖에 놓으면 그대로 돌아간다
+- 이름 (오른쪽): 놓인 유닛 자리를 고르면 그 자리 유닛만의 이름을 적는다 (비우면 프리셋 이름, 옅게 보인다)
 - 잉크 (오른쪽 위): 색마다 남은 잉크. 유닛을 놓으면 그만큼 줄고 빼면 돌아온다. 남은 잉크보다 많이 드는 유닛은 못 놓는다
 - 내 프리셋 (아래): 전체 / 탱커 / 근접 딜러 / 원거리 딜러 / 서포터 칸으로 나눠 본다. 지금 놓을 수 없는 카드는 흐리게.
   같은 프리셋을 여러 번 놓을 수 있다. 많으면 마우스 휠로 넘긴다. 카드에 마우스를 올리면 드는 잉크가 뜨고,
@@ -23,12 +24,13 @@
 """
 import math
 
-from pico2d import (clear_canvas, update_canvas, get_events, SDL_QUIT, SDL_KEYDOWN, SDL_MOUSEMOTION,
+from pico2d import (clear_canvas, update_canvas, SDL_QUIT, SDL_KEYDOWN, SDL_MOUSEMOTION,
                     SDL_MOUSEBUTTONDOWN, SDL_MOUSEBUTTONUP, SDL_BUTTON_LEFT, SDLK_ESCAPE)
 from sdl2 import SDL_MOUSEWHEEL
 
 import frames
 import game_framework
+import name_field
 import painter
 import prepare_mode
 import save_data
@@ -59,6 +61,7 @@ SPOT_W, SPOT_TOP = 48, 50                 # 자리 누르는 범위: 가로 ±48
 HEAL_RATE = 1.0                           # 치료: 그 유닛을 그린 잉크 x 잃은 체력 비율 x 이 배율 (색마다)
 HEAL_X = 112
 HEAL_Y = (546, 474)                       # 치료하기 / 전체 치료하기 버튼 y (드는 잉크는 버튼 바로 아래)
+NAME_X, NAME_Y = 1010, 250                # 고른 자리 이름 칸 (이름 글씨 왼쪽)
 DOUBLE_CLICK = 0.4                        # 이 시간(초) 안에 같은 유닛을 두 번 누르면 자리에서 뺀다
 
 INK_X, INK_TOP = 1010, 668
@@ -87,6 +90,8 @@ DRAG_START = 6
 toast = None
 t = 0.0
 splashes = []                    # 누른 자리에 튄 물감
+name = None                      # 고른 자리 이름 칸
+name_slot = None                 # 이름 칸이 맡은 자리
 
 
 # ---------------------------------------------------------------- 자리 계산
@@ -238,7 +243,9 @@ def our_power():
 # ---------------------------------------------------------------- 모드
 def init():
     global panel, fade, toast_img, field_img, spot_imgs, ink_icons, buttons, row0, tab, deleter
-    global selected, last_click, press, dragging, toast, t, heal_buttons
+    global selected, last_click, press, dragging, toast, t, heal_buttons, name, name_slot
+    name = name_field.NameField(NAME_X + 50, NAME_Y, 180, on_done=rename)
+    name_slot = None
     panel = image('draw', 'panel.png')
     fade = image('common', 'fade.png')
     toast_img = image('prepare', 'toast.png')
@@ -266,6 +273,7 @@ def init():
 
 
 def finish():
+    name.stop()
     global stage_id
     save_data.save_current()
     stage_id = None   # 다음에 '내 유닛' 으로 열면 그냥 내 유닛 화면
@@ -280,6 +288,25 @@ def resume():
     pass
 
 
+def rename(value):
+    if data() and name_slot is not None:
+        save_data.set_slot_name(data(), name_slot, value)
+
+
+def name_shown():
+    return data() is not None and selected is not None and data()['party'][selected] is not None
+
+
+def sync_name():
+    """고른 자리가 바뀌면 이름 칸을 그 자리 이름으로."""
+    global name_slot
+    slot = selected if name_shown() else None
+    if slot != name_slot:
+        name.stop()   # 적던 이름은 전 자리에 남긴다
+        name_slot = slot
+        name.value = (save_data.name_list(data())[slot] or '') if slot is not None else ''
+
+
 def press_down(mx, my):
     """마우스 누름: 버튼·× ·칸은 바로 처리, 놓인 유닛과 프리셋 카드는 뗄 때 (누르기·더블클릭 / 끌어 놓기) 처리."""
     global press, dragging
@@ -287,6 +314,9 @@ def press_down(mx, my):
     press = None
     if not data():
         return
+    if name_shown() and name.click(mx, my):   # 칸 밖을 누르면 적기를 끝낸다
+        return
+    name.stop()
     if not any(unit_cards.hit_delete(x, y, mx, my) and deleter.state(u) for u, x, y in visible()):
         slot = slot_at(mx, my)
         if slot is not None and data()['party'][slot] is not None:
@@ -368,7 +398,9 @@ def mouse_move(mx, my):
 
 def handle_events():
     global row0
-    for event in get_events():
+    for event in name_field.get_events():
+        if name.handle(event):   # 이름을 적는 중이면 글자·Enter·Esc 는 이름 칸으로
+            continue
         if event.type == SDL_QUIT:
             game_framework.quit()
         elif event.type == SDL_KEYDOWN and event.key == SDLK_ESCAPE:
@@ -390,6 +422,8 @@ def update():
     global t, toast
     dt = game_framework.frame_time
     t += dt
+    sync_name()
+    name.update(dt)
     for b in buttons + heal_buttons:
         b.update()
     for s in splashes:
@@ -488,6 +522,15 @@ def draw_heal():
             draw_cost(cost, HEAL_X, y - 32)
 
 
+def draw_name():
+    """고른 자리에 유닛이 있으면 그 자리 이름 칸 (비어 있으면 프리셋 이름이 옅게)."""
+    if not name_shown() or name_slot != selected:
+        return
+    unit = save_data.find_unit(data(), data()['party'][selected])
+    text.draw('이름', NAME_X, NAME_Y, 20, INK)
+    name.draw(unit_cards.label(unit) if unit else '')
+
+
 def draw_ink():
     if not data():
         return
@@ -543,6 +586,7 @@ def draw():
     draw_field()
     draw_heal()
     draw_ink()
+    draw_name()
     draw_presets()
     for b in buttons:
         b.draw()
