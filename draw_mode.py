@@ -1,7 +1,8 @@
 """유닛 그리기 화면. 준비 화면의 '유닛 추가하기' 를 누르면 그 위에 뜬다 (push_mode).
 
 위에서부터
-- 내 프리셋: 그려서 저장한 유닛. 누르면 그 그림·틀·체형이 종이에 올라와 이어 그리거나 고칠 수 있다.
+- 내 프리셋: 그려서 저장한 유닛. 한 줄에 MAX_PRESETS 장씩, 그 줄 위에서 마우스 휠(또는 양 끝 ◀ ▶)로 넘겨 본다
+  (처음엔 가장 최근 것들). 누르면 그 그림·틀·체형이 종이에 올라와 이어 그리거나 고칠 수 있다.
   카드에 마우스를 올리면 드는 잉크가 뜨고, × 를 두 번 누르면 그 프리셋을 지운다
 - 틀: 탱커(방패 기사) / 근접 딜러(검사) / 원거리 딜러(궁수) / 서포터(마법사)
 - 잉크: 검정·빨강·초록·파랑 잉크병 + 지우개 (병 옆 숫자는 가진 잉크, 그려도 줄지 않는다) · 체형: 작은 / 보통 / 큰
@@ -22,7 +23,7 @@ import numpy as np
 from pico2d import (clear_canvas, update_canvas, get_events,
                     SDL_QUIT, SDL_KEYDOWN, SDL_MOUSEMOTION, SDL_MOUSEBUTTONDOWN, SDL_MOUSEBUTTONUP, SDL_BUTTON_LEFT,
                     SDLK_ESCAPE, SDLK_1, SDLK_4, SDLK_e, SDLK_z)
-from sdl2 import SDL_GetModState, KMOD_CTRL
+from sdl2 import SDL_GetModState, KMOD_CTRL, SDL_MOUSEWHEEL
 
 import frames
 import game_framework
@@ -50,6 +51,7 @@ FADE_IN = 0.18
 PRESET_Y, FRAME_Y, INK_Y = 652, 554, 466
 ROW_X = 220                     # 줄 내용이 시작하는 x
 PRESET_GAP, MAX_PRESETS = 124, 8
+ARROW_L, ARROW_R = 216, 1222    # 프리셋 줄 양 끝 넘기기 ◀ ▶ x
 FRAME_GAP = 216
 INK_GAP = 120
 BODY_X, BODY_GAP = 880, 100     # 체형 칸
@@ -110,6 +112,7 @@ frame_id = frames.IDS[0]
 body = 'medium'
 tool = 'black'
 picked = None           # 지금 종이에 올린 프리셋 id
+preset_first = None     # 프리셋 줄 맨 앞 번호 (None = 가장 최근 것들이 보이게 맨 끝)
 painting = None         # 붓질 중인 종이 번호
 deleter = None
 toast = None
@@ -145,9 +148,25 @@ def hit(x, y, w, h, mx, my):
     return abs(mx - x) <= w / 2 and abs(my - y) <= h / 2
 
 
+def all_units():
+    return save_data.current['units'] if save_data.current else []
+
+
+def first_preset():
+    last = max(0, len(all_units()) - MAX_PRESETS)
+    return last if preset_first is None else max(0, min(preset_first, last))
+
+
+def scroll_presets(d):
+    """프리셋 줄을 d 장 넘긴다 (+ 오른쪽 = 최근 쪽)."""
+    global preset_first
+    preset_first = first_preset() + d
+    preset_first = first_preset()
+
+
 def shown_units():
-    units = save_data.current['units'] if save_data.current else []
-    return units[-MAX_PRESETS:]
+    i = first_preset()
+    return all_units()[i:i + MAX_PRESETS]
 
 
 def preset_cards():
@@ -248,6 +267,8 @@ def save_unit():
         s.paper.save_png(save_data.gear_path(slot, unit['id'], group=i))
     save_data.save_current()
     clear_paper()
+    global preset_first
+    preset_first = None   # 새로 저장한 것이 보이게 맨 끝으로
     say(f'{frames.BODY_NAMES[body]} {frames.get(frame_id)["name"]} 유닛을 프리셋에 저장했어요!')
 
 
@@ -276,7 +297,7 @@ def close():
 # ---------------------------------------------------------------- 모드
 def init():
     global panel, ink_wave, eraser_img, fade, toast_img, frame_imgs, body_imgs, ink_icons
-    global brush_tips, buttons, sheets, edits, tool, picked, painting, deleter, toast, t
+    global brush_tips, buttons, sheets, edits, tool, picked, painting, deleter, toast, t, preset_first
     panel = image('draw', 'panel.png')
     ink_wave = image('draw', 'ink_wave.png')
     eraser_img = image('draw', 'eraser.png')
@@ -298,7 +319,7 @@ def init():
                    ('undo', SIDE_L, 196, undo), ('clear', SIDE_R, 196, clear_paper),
                    ('save', SIDE_L, 108, save_unit), ('close', SIDE_R, 108, close)))]
     tool = 'black'
-    picked = painting = None
+    picked = painting = preset_first = None
     deleter = unit_cards.Deleter()
     toast = None
     t = 0.0
@@ -331,6 +352,10 @@ def click(mx, my):
     global painting, picked
     if any(b.click(mx, my) for b in buttons):
         return
+    for x, d in ((ARROW_L, -MAX_PRESETS), (ARROW_R, MAX_PRESETS)):
+        if hit(x, PRESET_Y, 30, 60, mx, my) and arrow_on(d):
+            scroll_presets(d)
+            return
     gone = deleter.click(preset_cards(), mx, my)
     if gone == 'asked':
         say('한 번 더 누르면 이 프리셋을 지워요')
@@ -393,6 +418,10 @@ def handle_events():
                 if sheet_at(mx, my) is None:
                     splashes.append(InkSplash(mx, my))
                 click(mx, my)
+        elif event.type == SDL_MOUSEWHEEL:
+            if abs(title_mode.mouse[1] - PRESET_Y) <= 56:   # 프리셋 줄 위에서만
+                scroll_presets(-event.wheel.y)
+                deleter.move(preset_cards(), *title_mode.mouse)
         elif event.type == SDL_MOUSEBUTTONUP and event.button == SDL_BUTTON_LEFT:
             if painting is not None:
                 sheets[painting].paper.end()
@@ -424,6 +453,15 @@ def draw_presets():
         return
     for i, unit in enumerate(units):
         unit_cards.draw(unit, preset_x(i), PRESET_Y, on=unit['id'] == picked, delete=deleter.state(unit))
+    for x, d, mark in ((ARROW_L, -1, '◀'), (ARROW_R, 1, '▶')):
+        if arrow_on(d):
+            text.draw(mark, x, PRESET_Y, 22, SOFT, 'c')
+
+
+def arrow_on(d):
+    """그쪽으로 더 넘길 프리셋이 있는가."""
+    i = first_preset()
+    return i > 0 if d < 0 else i + MAX_PRESETS < len(all_units())
 
 
 def draw_frames():
