@@ -1,7 +1,7 @@
 """내 유닛 화면. 준비 화면의 '내 유닛' 을 누르면 그 위에 뜬다 (push_mode).
 
 - 필드 미리보기 (위): 흑백 들판 왼쪽에 우리 자리 6칸 (앞줄 3 + 뒷줄 3), 오른쪽은 적이 설 자리.
-  놓은 유닛은 그린 그림 그대로 자리에 서 있다.
+  놓은 유닛은 그린 그림 그대로 자리에 서 있고, 발밑에 역할 마크가 붙는다.
   · 자리를 누르면 고름(노랗게) → 프리셋을 누르면 그 자리에 놓인다 (있던 유닛은 바뀐다)
   · 자리를 고른 채 다른 자리를 누르면 두 자리를 맞바꾼다 (빈 자리면 옮기기). 같은 자리를 다시 누르면 고르기 취소
   · 자리를 안 고르고 프리셋을 누르면 앞줄부터 빈 자리에 놓인다
@@ -423,9 +423,12 @@ def draw_field():
                 img.opacify(a)
                 img.draw(x, y - 6 + img.h / 2)
                 img.opacify(1)
-            if frac < 1:
-                text.draw('쓰러짐' if frac <= 0 else f'{round(frac * 100)}%', x, y - 20, 18,
+            if frac < 1:   # 역할 마크 + 남은 체력
+                unit_cards.draw_mark(unit, x - 24, y - 20, 22)
+                text.draw('쓰러짐' if frac <= 0 else f'{round(frac * 100)}%', x + 12, y - 20, 18,
                           (200, 80, 90) if frac <= 0 else INK, 'c')
+            else:
+                unit_cards.draw_mark(unit, x, y - 20, 22)
 
 
 def draw_dragged():

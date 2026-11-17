@@ -2,6 +2,7 @@
 
 카드 = 쪽지 + 무기를 손에 쥔 그림(unit_art.compose)을 잘라 줄인 썸네일 + 체형·틀 이름.
 드는 잉크는 카드에 마우스를 올렸을 때만 카드 아래 쪽지로 보인다 (draw_tip) — 색이 많아져도 잘리지 않게.
+draw_mark: 유닛 발밑 등에 붙이는 역할 마크 (탱커 방패 / 근딜 칼 / 원딜 활 / 서포터 치료 십자, tools/gen_marks.py).
 카드에 마우스를 올리면 오른쪽 위 모서리에 지우기 × 도 뜬다. 한 번 누르면 붉게 바뀌고, 한 번 더 누르면 지운다 (Deleter).
 open_canvas() 뒤에만 쓸 수 있다.
 """
@@ -88,6 +89,13 @@ def _draw(img, x, y, alpha, w=None, h=None):
     img.draw(x, y, w, h) if w else img.draw(x, y)
     if alpha < 1:
         img.opacify(1)
+
+
+def draw_mark(unit, x, y, size=24, alpha=1.0):
+    """유닛(또는 역할 id) 의 역할 마크를 (x, y) 가운데에 size 크기로."""
+    role = unit if isinstance(unit, str) else unit.get('frame')
+    if role in frames.IDS:
+        _draw(image('common', f'mark_{role}.png'), x, y, alpha, size, size)
 
 
 def draw_empty(x, y, alpha=1.0):

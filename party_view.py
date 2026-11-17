@@ -2,12 +2,13 @@
 
 내 유닛 화면의 자리 그대로: 앞줄이 소년 가까이, 뒷줄이 그 뒤. 줄(먼 쪽 ~ 가까운 쪽)마다 조금 위아래·비스듬히.
 그린 그림을 틀에 맞춰 마디로 나눠(unit_rig) 다리를 번갈아 내딛고 팔을 흔들며 걷는다. 무기는 오른손에 쥐고 함께 흔들린다.
-자리마다 걸음 박자를 조금씩 다르게.
+자리마다 걸음 박자를 조금씩 다르게. 발밑에 역할 마크.
 """
 import math
 
 import save_data
 import stats
+import unit_cards
 import unit_rig
 
 FRONT_GAP, BACK_GAP = 140, 270      # 소년 x 에서 앞줄·뒷줄까지 (왼쪽으로)
@@ -40,6 +41,7 @@ def draw(t, boy_x, ground, shadow=None):
         if shadow:
             shadow.draw(x, y - 2, r.w * 0.7, shadow.h * 0.45)
         frac = save_data.hp_list(data)[slot]
+        unit_cards.draw_mark(unit, x, y - 16, 22, max(0.4, stats.hurt_alpha(frac)))
         if frac <= 0:
             r.draw(x, y, 'idle', phase, stats.hurt_alpha(frac))   # 쓰러진 유닛은 걷지 못하고 흐릿하게 따라온다
         else:
