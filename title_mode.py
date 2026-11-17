@@ -5,7 +5,7 @@
 - 빈 곳을 클릭하면 원소 색 잉크 방울이 톡 튄다.
 - 시작하기(Enter/Space) → 세이브 파일 선택 창 → 로딩 화면(새 여정이면 도입 컷씬) → 준비 화면, 설정 → 설정 창, 끝내기(ESC) → 종료.
 - ↑ / ↓: (되찾은 색 밤) 밤 전용 버튼 ↔ 낮과 같은 버튼
-- →: 다음 그림체, ←: 이전 그림체 (낙서체 → 몽환 → 스케치북 → 잉크 → 파스텔 → 되찾은 색 → 되찾은 색 밤)
+- 그림체는 settings 의 title_theme 그대로 (낙서체 · 몽환 · 스케치북 · 잉크 · 파스텔 · 되찾은 색 · 되찾은 색 밤). 화면에서 바꾸는 키는 없다
 - 잉크·파스텔 그림체는 흑백 세상에서 시작해 잉크통(모래시계)에서부터 수채 물감이 번져 색이 칠해진다
 - 되찾은 색 그림체는 로고 'Ink' 도 검정 잉크로 시작해, 물감이 닿으면 I·n·k 가 빨강·초록·파랑으로 물든다.
   모래시계 목에서 검정 잉크 방울이 떨어져 아래 칸에서 색 방울로 튀고, 버튼·비눗방울은 다 물든 뒤에 나타난다
@@ -13,7 +13,7 @@
 import math
 from pico2d import (clear_canvas, update_canvas, get_events, get_canvas_height, hide_cursor, show_cursor,
                     SDL_QUIT, SDL_KEYDOWN, SDL_MOUSEMOTION, SDL_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT,
-                    SDLK_ESCAPE, SDLK_RETURN, SDLK_SPACE, SDLK_LEFT, SDLK_RIGHT, SDLK_UP, SDLK_DOWN)
+                    SDLK_ESCAPE, SDLK_RETURN, SDLK_SPACE, SDLK_UP, SDLK_DOWN)
 
 import cutscene_mode
 import game_framework
@@ -47,7 +47,7 @@ BUTTON_GAP = 262
 INTRO = 1.6  # 로고가 내려앉는 시간(초)
 CURSOR_OFFSET = (26, 26)  # 깃펜 이미지 중심에서 펜촉 끝까지 거리
 
-background = logo = logo_glow = subtitle = drip = bottle = bottle_glow = light_pool = cursor = theme_hint = None
+background = logo = logo_glow = subtitle = drip = bottle = bottle_glow = light_pool = cursor = None
 dye = []  # 물들이기 단계별 색 층 (있는 그림체만)
 logo_inks = []  # 로고 글자별 색 층 (되찾은 색 그림체만)
 letters_done = set()
@@ -86,23 +86,11 @@ def init():
     hide_cursor()
 
 
-def switch_theme(step=1):
-    """step 만큼 옆 그림체로 바꾸고(1 = 다음, -1 = 이전) 저장한 뒤 장면을 다시 불러온다."""
-    themes = settings.THEMES
-    now = settings.get('title_theme')
-    settings.set('title_theme', themes[(themes.index(now) + step) % len(themes)])
-    settings.save()
-    keep_mouse = mouse
-    load_scene()
-    move_mouse(keep_mouse)
-
-
 def load_scene():
     global logo_inks, letters_done, drip
-    global background, logo, logo_glow, subtitle, bottle, bottle_glow, light_pool, cursor, theme_hint, dye
+    global background, logo, logo_glow, subtitle, bottle, bottle_glow, light_pool, cursor, dye
     global buttons, bubbles, motes, twinkles, splashes, trail, t, mouse
     title = folder('title')
-    theme_hint = image('common', 'hint_theme.png')
     dye = []
     while exists(title, f'dye_{len(dye)}.png'):
         dye.append(image(title, f'dye_{len(dye)}.png'))
@@ -193,10 +181,6 @@ def handle_events():
             elif event.key in (SDLK_RETURN, SDLK_SPACE):
                 start_game()
                 return
-            elif event.key == SDLK_RIGHT:
-                switch_theme(1)
-            elif event.key == SDLK_LEFT:
-                switch_theme(-1)
             elif event.key in (SDLK_UP, SDLK_DOWN):
                 toggle_button_style()
         elif event.type == SDL_MOUSEMOTION:
@@ -343,11 +327,6 @@ def draw_scene():
         s_.draw()
 
 
-def draw_hint():
-    """오른쪽 아래 'T 그림체 바꾸기' 안내."""
-    draw_with_alpha(theme_hint, 0.75 * ease_out((t - INTRO) / INTRO), 1280 - theme_hint.w / 2 - 12, theme_hint.h / 2 + 8)
-
-
 def draw_cursor():
     """붓자국과 깃펜 커서. 설정 창보다 위에 그려야 창에 묻히지 않는다."""
     trail.draw()
@@ -357,6 +336,5 @@ def draw_cursor():
 def draw():
     clear_canvas()
     draw_scene()
-    draw_hint()
     draw_cursor()
     update_canvas()

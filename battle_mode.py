@@ -370,7 +370,7 @@ def draw_fighter(v):
 def draw_hud():
     st = stages.stage(stage_id)
     text.draw(f'{stage_id}  {st["name"]}', 40, 680, 30, INK)
-    text.draw(f'{battle_state.round}번째 차례', 40, 646, 22, SOFT)
+    text.draw(f'{battle_state.round}번째 턴', 40, 646, 22, SOFT)
     if result:
         return
     actor = battle_state.actor()
