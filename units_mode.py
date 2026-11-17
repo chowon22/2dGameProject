@@ -90,7 +90,7 @@ DRAG_START = 6
 toast = None
 t = 0.0
 splashes = []                    # 누른 자리에 튄 물감
-name = None                      # 고른 자리 이름 칸
+name_box = None                  # 고른 자리 이름 칸
 name_slot = None                 # 이름 칸이 맡은 자리
 
 
@@ -243,8 +243,8 @@ def our_power():
 # ---------------------------------------------------------------- 모드
 def init():
     global panel, fade, toast_img, field_img, spot_imgs, ink_icons, buttons, row0, tab, deleter
-    global selected, last_click, press, dragging, toast, t, heal_buttons, name, name_slot
-    name = name_field.NameField(NAME_X + 50, NAME_Y, 180, on_done=rename)
+    global selected, last_click, press, dragging, toast, t, heal_buttons, name_box, name_slot
+    name_box = name_field.NameField(NAME_X + 50, NAME_Y, 180, on_done=rename)
     name_slot = None
     panel = image('draw', 'panel.png')
     fade = image('common', 'fade.png')
@@ -273,7 +273,7 @@ def init():
 
 
 def finish():
-    name.stop()
+    name_box.stop()
     global stage_id
     save_data.save_current()
     stage_id = None   # 다음에 '내 유닛' 으로 열면 그냥 내 유닛 화면
@@ -302,9 +302,9 @@ def sync_name():
     global name_slot
     slot = selected if name_shown() else None
     if slot != name_slot:
-        name.stop()   # 적던 이름은 전 자리에 남긴다
+        name_box.stop()   # 적던 이름은 전 자리에 남긴다
         name_slot = slot
-        name.value = (save_data.name_list(data())[slot] or '') if slot is not None else ''
+        name_box.value = (save_data.name_list(data())[slot] or '') if slot is not None else ''
 
 
 def press_down(mx, my):
@@ -314,9 +314,9 @@ def press_down(mx, my):
     press = None
     if not data():
         return
-    if name_shown() and name.click(mx, my):   # 칸 밖을 누르면 적기를 끝낸다
+    if name_shown() and name_box.click(mx, my):   # 칸 밖을 누르면 적기를 끝낸다
         return
-    name.stop()
+    name_box.stop()
     if not any(unit_cards.hit_delete(x, y, mx, my) and deleter.state(u) for u, x, y in visible()):
         slot = slot_at(mx, my)
         if slot is not None and data()['party'][slot] is not None:
@@ -399,7 +399,7 @@ def mouse_move(mx, my):
 def handle_events():
     global row0
     for event in name_field.get_events():
-        if name.handle(event):   # 이름을 적는 중이면 글자·Enter·Esc 는 이름 칸으로
+        if name_box.handle(event):   # 이름을 적는 중이면 글자·Enter·Esc 는 이름 칸으로
             continue
         if event.type == SDL_QUIT:
             game_framework.quit()
@@ -423,7 +423,7 @@ def update():
     dt = game_framework.frame_time
     t += dt
     sync_name()
-    name.update(dt)
+    name_box.update(dt)
     for b in buttons + heal_buttons:
         b.update()
     for s in splashes:
@@ -528,7 +528,7 @@ def draw_name():
         return
     unit = save_data.find_unit(data(), data()['party'][selected])
     text.draw('이름', NAME_X, NAME_Y, 20, INK)
-    name.draw(unit_cards.label(unit) if unit else '')
+    name_box.draw(unit_cards.label(unit) if unit else '')
 
 
 def draw_ink():

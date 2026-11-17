@@ -115,7 +115,7 @@ body = 'medium'
 tool = 'black'
 picked = None           # 지금 종이에 올린 프리셋 id
 preset_first = None     # 프리셋 줄 맨 앞 번호 (None = 가장 최근 것들이 보이게 맨 끝)
-name = None             # 이름 칸 (name_field.NameField)
+name_box = None         # 이름 칸 (name_field.NameField)
 painting = None         # 붓질 중인 종이 번호
 deleter = None
 toast = None
@@ -254,8 +254,8 @@ def pick_preset(unit):
         s.paper.load_rgba(rgba)
         s.paper.history.clear()
     picked = unit['id']
-    name.stop()
-    name.value = unit.get('name', '')   # 불러온 프리셋 이름 (고쳐서 저장하면 새 프리셋 이름)
+    name_box.stop()
+    name_box.value = unit.get('name', '')   # 불러온 프리셋 이름 (고쳐서 저장하면 새 프리셋 이름)
 
 
 def save_unit():
@@ -265,9 +265,9 @@ def save_unit():
     if all(s.paper.is_empty() for s in sheets):
         say('아직 아무것도 그리지 않았어요')
         return
-    name.stop()
-    unit = save_data.add_unit(save_data.current, frame_id, counts(), ink_used(), body=body, name=name.value)
-    name.value = ''
+    name_box.stop()
+    unit = save_data.add_unit(save_data.current, frame_id, counts(), ink_used(), body=body, name=name_box.value)
+    name_box.value = ''
     slot = save_data.current['slot']
     sheets[0].paper.save_png(save_data.unit_path(slot, unit['id']))
     for i, s in enumerate(sheets[1:]):
@@ -304,8 +304,8 @@ def close():
 # ---------------------------------------------------------------- 모드
 def init():
     global panel, ink_wave, eraser_img, fade, toast_img, frame_imgs, body_imgs, ink_icons
-    global brush_tips, buttons, sheets, edits, tool, picked, painting, deleter, toast, t, preset_first, name
-    name = name_field.NameField(STAT_X + 58, NAME_Y, 220)
+    global brush_tips, buttons, sheets, edits, tool, picked, painting, deleter, toast, t, preset_first, name_box
+    name_box = name_field.NameField(STAT_X + 58, NAME_Y, 220)
     panel = image('draw', 'panel.png')
     ink_wave = image('draw', 'ink_wave.png')
     eraser_img = image('draw', 'eraser.png')
@@ -336,7 +336,7 @@ def init():
 
 
 def finish():
-    name.stop()   # 글자 입력을 끈다 (단축키가 다시 먹게)
+    name_box.stop()   # 글자 입력을 끈다 (단축키가 다시 먹게)
     save_data.save_current()
 
 
@@ -359,7 +359,7 @@ def move_mouse(pos):
 
 def click(mx, my):
     global painting, picked
-    if name.click(mx, my):   # 칸 밖을 누르면 적기를 끝낸다
+    if name_box.click(mx, my):   # 칸 밖을 누르면 적기를 끝낸다
         return
     if any(b.click(mx, my) for b in buttons):
         return
@@ -402,7 +402,7 @@ def click(mx, my):
 def handle_events():
     global painting
     for event in name_field.get_events():
-        if name.handle(event):   # 이름을 적는 중이면 글자·Enter·Esc 는 이름 칸으로
+        if name_box.handle(event):   # 이름을 적는 중이면 글자·Enter·Esc 는 이름 칸으로
             continue
         if event.type == SDL_QUIT:
             game_framework.quit()
@@ -445,7 +445,7 @@ def update():
     global t, toast
     dt = game_framework.frame_time
     t += dt
-    name.update(dt)
+    name_box.update(dt)
     for b in buttons:
         b.update()
     for s in splashes:
@@ -557,7 +557,7 @@ def draw_side():
             text.draw(str(used[c]), x + 20, y - 15, 20, INK)
             x += 34 + 11 * len(str(used[c]))
     text.draw('이름', STAT_X, NAME_Y, 20, INK)
-    name.draw(frames.get(frame_id, body)['name'])
+    name_box.draw(frames.get(frame_id, body)['name'])
     text.draw('되돌리기: Ctrl+Z', SIDE_X, 30, 18, (150, 128, 170), 'c')
 
 
