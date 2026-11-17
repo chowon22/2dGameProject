@@ -298,6 +298,28 @@ class UnitSaveTest(unittest.TestCase):
         self.assertEqual(data['ink']['red'], red - 10)
         self.assertEqual(save_data.heal_cost(data, [0]), {})          # 다 나으면 0
 
+    def test_unit_and_slot_names(self):
+        data = save_data.new_game(1, self.dir, now=0.0)
+        u = save_data.add_unit(data, 'tank', {}, {'black': 1}, self.dir, name='  든든이 방패왕 어흥  ')
+        self.assertEqual(u['name'], '든든이 방패왕')                         # 앞뒤 빈칸 빼고 8 글자까지
+        v = save_data.add_unit(data, 'melee', {}, {'black': 1}, self.dir, name='   ')
+        self.assertNotIn('name', v)                                     # 빈 이름 = 기본 이름
+        save_data.add_to_party(data, u['id'])
+        save_data.add_to_party(data, u['id'])
+        self.assertEqual(save_data.slot_name(data, 0), u['name'])        # 자리 이름이 없으면 프리셋 이름
+        save_data.set_slot_name(data, 1, '둘째')
+        self.assertEqual(save_data.slot_name(data, 1), '둘째')
+        self.assertEqual(save_data.slot_name(data, 0), u['name'])        # 같은 프리셋이라도 자리마다 따로
+        save_data.swap_slots(data, 1, 4)                                 # 옮기면 이름도 따라간다
+        self.assertEqual(save_data.slot_name(data, 4), '둘째')
+        save_data.write(data, self.dir)
+        self.assertEqual(save_data.slot_name(save_data.load(1, self.dir), 4), '둘째')   # 저장해도 남는다
+        save_data.remove_from_party(data, 4)
+        save_data.add_to_party(data, u['id'])
+        self.assertEqual(save_data.slot_name(data, 1), u['name'])        # 빼고 다시 놓으면 프리셋 이름
+        save_data.set_slot_name(data, 1, '')
+        self.assertEqual(save_data.slot_name(data, 1), u['name'])
+
     def test_party_full(self):
         data = save_data.new_game(1, self.dir, now=0.0)
         u = save_data.add_unit(data, 'tank', {}, {'black': 1}, self.dir)

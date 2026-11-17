@@ -50,9 +50,10 @@ def blank(slot, now=None):
         'stage': 0,           # 여정 진행 (0 = 아직 첫 필드 전)
         'intro_seen': False,  # 도입 이야기(컷씬)를 봤는가 — 보기 전이면 준비 화면 전에 보여 준다
         'ink': {'black': START_INK, 'red': 0, 'green': 0, 'blue': 0},
-        'units': [],          # 그린 유닛 (프리셋): {'id', 'frame', 'body', 'counts', 'ink'} — 그림은 unit_path·gear_path
+        'units': [],          # 그린 유닛 (프리셋): {'id', 'frame', 'body', 'counts', 'ink', ('name')} — 그림은 unit_path·gear_path
         'party': [None] * PARTY_MAX,  # 내 유닛: 필드 자리마다 놓은 프리셋 id (빈 자리 None, 같은 id 여러 번 가능)
         'party_hp': [1.0] * PARTY_MAX,  # 자리마다 남은 체력 비율 (1 가득 ~ 0 쓰러짐). 전투가 끝나도 이어지고 치료해야 찬다
+        'party_names': [None] * PARTY_MAX,  # 자리마다 따로 붙인 이름 (None = 프리셋 이름)
         'cleared': [],        # 깬 스테이지 ('0-1' …)
     }
 
@@ -78,6 +79,8 @@ def load(slot, folder=None):
     hp = full.get('party_hp') if isinstance(full.get('party_hp'), list) else []
     full['party_hp'] = [min(1.0, max(0.0, float(h))) if isinstance(h, (int, float)) else 1.0
                         for h in (hp + [1.0] * PARTY_MAX)[:PARTY_MAX]]
+    names = full['party_names'] if isinstance(full.get('party_names'), list) else []
+    full['party_names'] = [clean_name(n) if isinstance(n, str) else None for n in (names + [None] * PARTY_MAX)[:PARTY_MAX]]
     return full
 
 
@@ -128,11 +131,22 @@ def gear_path(slot, unit_id, folder=None, group=0):
     return os.path.join(units_dir(slot, folder), f'unit_{unit_id}_gear{group}.png')
 
 
-def add_unit(data, frame, counts, ink_used, folder=None, body='medium'):
+NAME_MAX = 8   # 유닛 이름 글자 수
+
+
+def clean_name(name):
+    """앞뒤 빈칸을 빼고 NAME_MAX 글자까지. 비면 None (= 기본 이름을 쓴다)."""
+    name = (name or '').strip()[:NAME_MAX].strip()
+    return name or None
+
+
+def add_unit(data, frame, counts, ink_used, folder=None, body='medium', name=None):
     """유닛 기록을 더한다. 가진 잉크는 줄지 않고, 이 유닛을 꺼낼 때 드는 잉크(ink_used)만 적어 둔다.
     그림 PNG 는 부른 쪽이 unit_path(사람 종이)·gear_path(무기 종이마다) 에 저장한다 (폴더는 여기서 만들어 둔다)."""
     unit_id = max((u['id'] for u in data['units']), default=0) + 1
     unit = {'id': unit_id, 'frame': frame, 'body': body, 'counts': dict(counts), 'ink': dict(ink_used)}
+    if clean_name(name):
+        unit['name'] = clean_name(name)   # 프리셋 기본 이름 (없으면 역할 이름)
     data['units'].append(unit)
     os.makedirs(units_dir(data['slot'], folder), exist_ok=True)
     return unit
@@ -220,6 +234,7 @@ def place(data, slot, unit_id):
         return False
     data['party'][slot] = unit_id
     hp_list(data)[slot] = 1.0   # 새로 놓은 유닛은 가득
+    name_list(data)[slot] = None
     return True
 
 
@@ -231,6 +246,7 @@ def add_to_party(data, unit_id):
     slot = data['party'].index(None)
     data['party'][slot] = unit_id
     hp_list(data)[slot] = 1.0
+    name_list(data)[slot] = None
     return slot
 
 
@@ -239,13 +255,15 @@ def remove_from_party(data, slot):
     if 0 <= slot < PARTY_MAX:
         data['party'][slot] = None
         hp_list(data)[slot] = 1.0
+        name_list(data)[slot] = None
 
 
 def swap_slots(data, a, b):
     """두 자리를 맞바꾼다 (한쪽이 비었으면 옮기기). 남은 체력도 함께 옮겨 간다."""
-    p, h = data['party'], hp_list(data)
+    p, h, n = data['party'], hp_list(data), name_list(data)
     p[a], p[b] = p[b], p[a]
     h[a], h[b] = h[b], h[a]
+    n[a], n[b] = n[b], n[a]
 
 
 def hp_list(data):
@@ -253,6 +271,27 @@ def hp_list(data):
     if not isinstance(data.get('party_hp'), list) or len(data['party_hp']) != PARTY_MAX:
         data['party_hp'] = [1.0] * PARTY_MAX
     return data['party_hp']
+
+
+def name_list(data):
+    """자리마다 따로 붙인 이름 (None 이면 프리셋 이름). 예전 세이브면 만들어 둔다."""
+    if not isinstance(data.get('party_names'), list) or len(data['party_names']) != PARTY_MAX:
+        data['party_names'] = [None] * PARTY_MAX
+    return data['party_names']
+
+
+def set_slot_name(data, slot, name):
+    """slot 자리 유닛에 이름을 붙인다 (빈 이름이면 프리셋 이름으로 돌아간다)."""
+    if 0 <= slot < PARTY_MAX and data['party'][slot] is not None:
+        name_list(data)[slot] = clean_name(name)
+
+
+def slot_name(data, slot):
+    """slot 자리 유닛의 이름: 자리 이름 → 프리셋 이름 → None."""
+    if data['party'][slot] is None:
+        return None
+    unit = find_unit(data, data['party'][slot])
+    return name_list(data)[slot] or (unit or {}).get('name')
 
 
 def hurt_slots(data):
