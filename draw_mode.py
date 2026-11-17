@@ -7,10 +7,12 @@
 - 잉크: 검정·빨강·초록·파랑 잉크병 + 지우개 (병 옆 숫자는 가진 잉크, 그려도 줄지 않는다) · 체형: 작은 / 보통 / 큰
 - 종이 여러 장: 왼쪽 사람 종이, 그 옆에 무기마다 한 장 (원딜은 활·화살 두 장). 체형에 따라 종이·밑그림 크기가 바뀐다.
   틀·체형을 바꿔도 그리던 그림은 발 자리를 맞춰 옮겨 온다.
-  종이는 틀 모양으로만 칠해진다 (틀 둘레 조금까지, 밖은 흐리게 덮어 둔다 — 팔다리가 따로 움직여도 어색하지 않게).
+  사람 종이는 틀 모양으로만 칠해진다 (틀 둘레 조금까지, 밖은 흐리게 덮어 둔다 — 팔다리가 따로 움직여도 어색하지 않게).
+  무기 종이는 통째로 한 덩어리라 네모 전체에 그릴 수 있다.
   들어오자마자 바로 그릴 수 있고, 붓질은 시작한 종이 안에서만 칠해진다. 커서 자리에 지금 붓 색·굵기의 점이 보인다.
   가진 잉크와 상관없이 어떤 색이든 마음껏 칠한다 (잉크는 내 유닛에서 놓을 때 따진다)
-오른쪽: 되돌리기 / 다 지우기 / 저장하기(프리셋에 더하고 드는 잉크를 적어 둔다) / 닫기
+오른쪽: 이 틀·체형의 기본 능력치(검정 100) · 지금 그림의 능력치 · 드는 잉크,
+  되돌리기 / 다 지우기 / 저장하기(프리셋에 더하고 드는 잉크를 적어 둔다) / 닫기
 
 키: 1~4 잉크, E 지우개, Ctrl+Z 되돌리기, ESC 닫기
 """
@@ -25,6 +27,7 @@ import game_framework
 import painter
 import prepare_mode
 import save_data
+import stats
 import text
 import title_mode
 import unit_art
@@ -65,9 +68,11 @@ class Sheet:
         self.w, self.h = size
         self.paper = painter.Paper(self.w, self.h, area)
         self.tex = LiveImage(self.w, self.h)
-        cover = np.zeros((self.h, self.w, 4), np.uint8)
-        cover[~area] = OUTSIDE
-        self.cover = LiveImage(self.w, self.h, cover)
+        self.cover = None
+        if area is not None:
+            cover = np.zeros((self.h, self.w, 4), np.uint8)
+            cover[~area] = OUTSIDE
+            self.cover = LiveImage(self.w, self.h, cover)
         self.paper.dirty = (0, 0, self.w, self.h)
         self.cx, self.cy = left + self.w / 2, bottom + self.h / 2
         self.top = bottom + self.h
@@ -167,7 +172,8 @@ def build_sheets(keep=True):
     bottom = round((AREA_B + AREA_T) / 2 - max(sp[2][1] for sp in specs) / 2)
     new, x = [], round((AREA_L + AREA_R) / 2 - total_w / 2)
     for i, (label, guide, size, group) in enumerate(specs):
-        s = Sheet(label, guide, x, bottom, size, frames.paint_area(frame_id, group, body))
+        area = frames.paint_area(frame_id, None, body) if group is None else None   # 무기 종이는 네모 전체
+        s = Sheet(label, guide, x, bottom, size, area)
         if i < len(old) and not old[i].paper.is_empty():
             s.paper.load_rgba(frames.fit(old[i].paper.rgba(), *size))
             s.paper.history.clear()
@@ -465,21 +471,31 @@ def draw_brush_tip():
 def draw_papers():
     for s in sheets:
         image('draw', f'paper_{s.w}x{s.h}.png').draw(s.cx, s.cy)
-        s.cover.draw(s.cx, s.cy)
+        if s.cover:
+            s.cover.draw(s.cx, s.cy)
         image('draw', s.guide + '.png').draw(s.cx, s.cy)
         s.tex.draw(s.cx, s.cy)
         text.draw(s.label, s.left + 8, s.top - 16, 20, (170, 154, 186))
+
+
+def stat_line(st):
+    out = f'체력 {st["hp"]}  ·  공격력 {st["atk"]:g}'
+    return out + f'  ·  버프 {st["buff"]:g}' if frame_id == 'support' else out
 
 
 def draw_side():
     for b in buttons:
         b.draw()
     used = ink_used()
+    base = stats.unit_stats({'frame': frame_id, 'body': body, 'ink': {'black': 100 * stats.INK_PER_PERCENT}})
+    now = stats.unit_stats({'frame': frame_id, 'body': body, 'ink': used, 'counts': counts()})
+    text.draw('기본 능력치 (검정 100)', SIDE_X, 428, 20, SOFT, 'c')
+    text.draw(stat_line(base), SIDE_X, 402, 24, INK, 'c')
+    text.draw('지금 능력치', SIDE_X, 366, 20, SOFT, 'c')
+    text.draw(stat_line(now) if any(used.values()) else '-', SIDE_X, 340, 24, INK, 'c')
     lines = [f'{NAMES[c]} {used[c]}' for c in painter.COLORS if used[c]]
-    f = frames.get(frame_id, body)
-    text.draw(f'{frames.BODY_NAMES[body]} {f["name"]}  ·  검정 → {f["stat"]} ↑  ·  색 → 원소', SIDE_X, 420, 20, SOFT, 'c')
-    text.draw('이 그림에 드는 잉크', SIDE_X, 384, 24, INK, 'c')
-    text.draw('  ·  '.join(lines) if lines else '아직 없음', SIDE_X, 354, 24, SOFT, 'c')
+    if lines:
+        text.draw('  ·  '.join(lines), SIDE_X, 310, 20, SOFT, 'c')
     text.draw('Ctrl+Z 로도 되돌려요', SIDE_X, 92, 20, (150, 128, 170), 'c')
 
 
