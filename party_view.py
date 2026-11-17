@@ -41,7 +41,7 @@ def draw(t, boy_x, ground, shadow=None):
         if shadow:
             shadow.draw(x, y - 2, r.w * 0.7, shadow.h * 0.45)
         frac = save_data.hp_list(data)[slot]
-        unit_cards.draw_mark(unit, x, y - 16, 22, max(0.4, stats.hurt_alpha(frac)))
+        unit_cards.draw_mark(unit, x, y - 18, 28, max(0.4, stats.hurt_alpha(frac)))
         if frac <= 0:
             r.draw(x, y, 'idle', phase, stats.hurt_alpha(frac))   # 쓰러진 유닛은 걷지 못하고 흐릿하게 따라온다
         else:

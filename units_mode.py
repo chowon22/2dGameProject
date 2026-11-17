@@ -57,7 +57,7 @@ FIGURE_SCALE = 0.2                        # 자리에 서 있는 그림 배율 (
 SPOT_W, SPOT_TOP = 48, 50                 # 자리 누르는 범위: 가로 ±48, 발 아래 16 ~ 위 50
 HEAL_RATE = 1.0                           # 치료: 그 유닛을 그린 잉크 x 잃은 체력 비율 x 이 배율 (색마다)
 HEAL_X = 112
-HEAL_Y = (536, 450)                       # 치료하기 / 전체 치료하기 버튼 y
+HEAL_Y = (546, 474)                       # 치료하기 / 전체 치료하기 버튼 y (드는 잉크는 버튼 바로 아래)
 DOUBLE_CLICK = 0.4                        # 이 시간(초) 안에 같은 유닛을 두 번 누르면 자리에서 뺀다
 
 INK_X, INK_TOP = 1010, 668
@@ -424,11 +424,11 @@ def draw_field():
                 img.draw(x, y - 6 + img.h / 2)
                 img.opacify(1)
             if frac < 1:   # 역할 마크 + 남은 체력
-                unit_cards.draw_mark(unit, x - 24, y - 20, 22)
+                unit_cards.draw_mark(unit, x - 26, y - 20, 28)
                 text.draw('쓰러짐' if frac <= 0 else f'{round(frac * 100)}%', x + 12, y - 20, 18,
                           (200, 80, 90) if frac <= 0 else INK, 'c')
             else:
-                unit_cards.draw_mark(unit, x, y - 20, 22)
+                unit_cards.draw_mark(unit, x, y - 20, 28)
 
 
 def draw_dragged():
@@ -478,7 +478,7 @@ def draw_heal():
         cost = heal_cost(everyone)
         b.draw(1.0 if cost else 0.4)   # 고른 다친 유닛이 없으면 흐리게
         if cost:
-            draw_cost(cost, HEAL_X, y - 46)
+            draw_cost(cost, HEAL_X, y - 32)
 
 
 def draw_ink():

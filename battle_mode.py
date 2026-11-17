@@ -357,7 +357,7 @@ def draw_fighter(v):
                            img.w * k, img.h * k)
         img.opacify(1)
     if 'rig' in v:   # 우리 유닛: 체력바 왼쪽에 역할 마크
-        unit_cards.draw_mark(f.role, x - HP_BAR_W / 2 - 16, y - 18, 24, a)
+        unit_cards.draw_mark(f.role, x - HP_BAR_W / 2 - 18, y - 18, 30, a)
     if f.alive:
         draw_hp_bar(x, y - 18, f.hp / f.max_hp)
         elem = stats.ELEMENT_NAMES.get(f.element) if f.element else ''

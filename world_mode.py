@@ -4,6 +4,7 @@
 - 월드를 누르면 그 월드의 스테이지 w-1 ~ w-7 이 길을 따라 뜬다 (깬 스테이지는 별, 다음 스테이지만 열림, 마지막은 보스)
 - 스테이지를 누르면 내 유닛 화면이 '출전 준비' 로 뜬다: 적 자리·예상 전투력을 보고 유닛을 놓은 뒤 시작
 - 뒤로 / ESC: 스테이지 → 월드 → 준비 화면
+- 누르는 곳마다 물감이 톡 튄다 (준비 화면처럼). 출발하기! 를 누르고 들어오면 그 자리에서 바로 튄다
 """
 import math
 
@@ -17,6 +18,7 @@ import stages
 import text
 import title_mode
 from assets import image
+from title_effects import InkSplash
 from ui_button import Button
 
 W, H = 1280, 720
@@ -85,6 +87,9 @@ def open_stage(sid):
 
 
 # ---------------------------------------------------------------- 모드
+splashes = []                   # 누른 자리에 튄 물감
+
+
 def init():
     global panel, fade, toast_img, buttons, world, hover, toast, t
     panel = image('draw', 'panel.png')
@@ -93,6 +98,7 @@ def init():
     buttons = [Button(1140, 70, 'button_back.png', 'button_back_hover.png', back, 0.2, 'world')]
     world = hover = toast = None
     t = 0.0
+    splashes[:] = [InkSplash(*title_mode.mouse)]   # 출발하기! 를 누른 자리에서 물감이 튄다
     title_mode.move_mouse(title_mode.mouse)
 
 
@@ -139,6 +145,7 @@ def handle_events():
             hover = thing_at(mx, my)
         elif event.type == SDL_MOUSEBUTTONDOWN and event.button == SDL_BUTTON_LEFT and t > FADE_IN:
             mx, my = title_mode.to_canvas(event)
+            splashes.append(InkSplash(mx, my))
             if any(b.click(mx, my) for b in buttons):
                 return
             thing = thing_at(mx, my)
@@ -157,6 +164,9 @@ def update():
     t += dt
     for b in buttons:
         b.update()
+    for s in splashes:
+        s.update()
+    splashes[:] = [s for s in splashes if not s.done][-12:]
     title_mode.trail.update()
     if toast:
         toast = (toast[0], toast[1] - dt) if toast[1] > dt else None
@@ -226,6 +236,8 @@ def draw():
         draw_stages()
     for b in buttons:
         b.draw()
+    for s in splashes:
+        s.draw()
     draw_toast()
     if t < FADE_IN:
         fade.opacify(0.5 * (1 - t / FADE_IN))
