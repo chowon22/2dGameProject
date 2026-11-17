@@ -420,7 +420,7 @@ def handle_events():
                 click(mx, my)
         elif event.type == SDL_MOUSEWHEEL:
             if abs(title_mode.mouse[1] - PRESET_Y) <= 56:   # 프리셋 줄 위에서만
-                scroll_presets(-event.wheel.y)
+                scroll_presets(-event.y)
                 deleter.move(preset_cards(), *title_mode.mouse)
         elif event.type == SDL_MOUSEBUTTONUP and event.button == SDL_BUTTON_LEFT:
             if painting is not None:

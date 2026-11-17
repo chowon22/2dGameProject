@@ -383,7 +383,7 @@ def handle_events():
         elif event.type == SDL_MOUSEBUTTONUP and event.button == SDL_BUTTON_LEFT:
             release(*title_mode.to_canvas(event))
         elif event.type == SDL_MOUSEWHEEL:
-            row0 = min(max(0, row0 - event.wheel.y), max_row0())
+            row0 = min(max(0, row0 - event.y), max_row0())
 
 
 def update():
