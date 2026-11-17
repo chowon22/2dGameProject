@@ -276,13 +276,27 @@ class UnitSaveTest(unittest.TestCase):
         self.assertEqual(loaded['party_hp'][4], 0.4)
         self.assertEqual(loaded['party_hp'][0], 1.0)
         black = loaded['ink']['black']
-        self.assertFalse(save_data.heal(loaded, [4], 10 ** 6))          # 잉크가 모자라면 못 한다
-        self.assertTrue(save_data.heal(loaded, [4], 12))
+        self.assertEqual(save_data.heal_cost(loaded, [4]), {'black': 6})   # 그린 10 x 잃은 0.6
+        self.assertFalse(save_data.heal(loaded, [4], {'black': 10 ** 6}))  # 잉크가 모자라면 못 한다
+        self.assertTrue(save_data.heal(loaded, [4], {'black': 12}))
         self.assertEqual(loaded['party_hp'][4], 1.0)
         self.assertEqual(loaded['ink']['black'], black - 12)          # 치료에 쓴 잉크는 정말로 빠진다
         loaded['party_hp'][1] = 0.0
         save_data.remove_from_party(loaded, 1)                         # 빼면 다친 상태도 없어진다
         self.assertEqual(loaded['party_hp'][1], 1.0)
+
+    def test_heal_cost_uses_each_color(self):
+        data = save_data.new_game(1, self.dir, now=0.0)
+        data['ink'].update({'black': 100, 'red': 100})
+        u = save_data.add_unit(data, 'melee', {}, {'black': 10, 'red': 20}, self.dir)
+        save_data.add_to_party(data, u['id'])
+        data['party_hp'][0] = 0.5
+        cost = save_data.heal_cost(data, [0])
+        self.assertEqual(cost, {'black': 5, 'red': 10})                # 원소 색도 그만큼 든다
+        red = data['ink']['red']
+        self.assertTrue(save_data.heal(data, [0], cost))
+        self.assertEqual(data['ink']['red'], red - 10)
+        self.assertEqual(save_data.heal_cost(data, [0]), {})          # 다 나으면 0
 
     def test_party_full(self):
         data = save_data.new_game(1, self.dir, now=0.0)

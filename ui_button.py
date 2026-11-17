@@ -36,8 +36,12 @@ class Button:
         target = 1.07 if self.hovered else 1.0
         self.scale += (target - self.scale) * min(1.0, dt * 12)
 
-    def draw(self):
+    def draw(self, alpha=1.0):
         img = self.hover_image if self.hovered else self.normal
         bob = math.sin(self.t * 2.2) * 2.5
         tilt = math.sin(self.t * 1.7) * 0.015 if self.hovered else 0.0
+        if alpha < 1:
+            img.opacify(alpha)
         img.composite_draw(tilt, '', self.x, self.y + bob, img.w * self.scale, img.h * self.scale)
+        if alpha < 1:
+            img.opacify(1)

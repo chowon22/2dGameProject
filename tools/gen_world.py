@@ -3,7 +3,7 @@
 - world_<n> / world_<n>_hover / world_<n>_locked: 월드 카드 (큰 번호 + 이름)
 - stage / stage_hover / stage_clear / stage_locked / stage_boss (+ _hover): 스테이지 동그라미 (번호는 실행 중에 쓴다)
 - result: 승리·패배 쪽지
-- button_start / back / skip / flee / return / heal (+ _hover)
+- button_start / back / skip / flee / return / heal / heal_all (+ _hover)
 
 실행: python tools/gen_world.py
 """
@@ -88,10 +88,18 @@ BUTTONS = (
     ('flee', '도망가기', 'pink', (180, 72), 30),
     ('return', '돌아가기', 'sky', (200, 80), 32),
     ('heal', '치료하기', 'mint', (180, 72), 30),
+    ('heal_all', '전체 치료하기', 'sky', (200, 72), 26),
 )
 
 
-def main():
+def main(only=None):
+    if only:   # 버튼 몇 개만 다시 만들기: python tools/gen_world.py heal_all
+        for i, (name, label, tint, size, fs) in enumerate(BUTTONS):
+            if name in only:
+                for hover in (False, True):
+                    save(pastel.button(label, PASTEL[tint], 1500 + i, hover, size=size, font_size=fs),
+                         f'button_{name}{"_hover" if hover else ""}.png')
+        return
     for w in stages.worlds():
         for state in ('off', 'hover', 'locked'):
             suffix = {'off': '', 'hover': '_hover', 'locked': '_locked'}[state]
@@ -107,4 +115,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    main(sys.argv[1:])

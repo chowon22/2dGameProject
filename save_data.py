@@ -14,6 +14,7 @@ pico2d 와 무관한 순수 로직이라 따로 테스트할 수 있다 (tests/t
 """
 import glob
 import json
+import math
 import os
 import shutil
 import time
@@ -259,11 +260,31 @@ def hurt_slots(data):
     return [s for s, uid in enumerate(data['party']) if uid is not None and hp_list(data)[s] < 1.0]
 
 
+def heal_cost(data, slots, rate=1.0):
+    """slots 유닛을 가득 치료하는 데 드는 잉크 {색: 양}: 흐려진 만큼 다시 칠한다고 쳐서
+    색마다 (그 유닛을 그린 그 색 잉크 x 잃은 체력 비율) 의 합을 올림 (원소 색으로 칠한 유닛은 그 색도 든다).
+    다친 유닛이 있으면 모두 합쳐 적어도 1."""
+    total = {}
+    for s in slots:
+        unit = find_unit(data, data['party'][s])
+        lost = 1 - hp_list(data)[s]
+        if not unit or lost <= 0:
+            continue
+        for c, n in unit.get('ink', {}).items():
+            total[c] = total.get(c, 0.0) + n * lost * rate
+    cost = {c: math.ceil(v - 1e-9) for c, v in total.items() if v > 1e-9}
+    if not cost and any(hp_list(data)[s] < 1 for s in slots if data['party'][s] is not None):
+        cost = {'black': 1}
+    return cost
+
+
 def heal(data, slots, cost):
-    """slots 자리 유닛을 가득 치료하고 검정 잉크 cost 를 쓴다 (가진 잉크에서 정말로 빠진다). 모자라면 False."""
-    if ink_left(data).get('black', 0) < cost:
+    """slots 자리 유닛을 가득 치료하고 잉크 cost {색: 양} 을 쓴다 (가진 잉크에서 정말로 빠진다). 모자라면 False."""
+    left = ink_left(data)
+    if any(left.get(c, 0) < n for c, n in cost.items()):
         return False
-    data['ink']['black'] -= cost
+    for c, n in cost.items():
+        data['ink'][c] = data['ink'].get(c, 0) - n
     for s in slots:
         hp_list(data)[s] = 1.0
     return True

@@ -14,9 +14,9 @@
   × 를 두 번 누르면 프리셋을 지운다
 - 다 빼기 / 닫기, ESC 닫기
 - 전투에서 다친 유닛은 반투명한 채로 남는다 (남은 체력 % 표시, 쓰러지면 '쓰러짐').
-  치료하기: 검정 잉크를 써서 가득 치료한다. 다친 유닛 자리를 골라 두면 그 유닛만, 아니면 다친 유닛 모두.
-  흐려진 만큼 다시 칠하는 셈이라
-  드는 잉크 = 그 유닛을 그린 잉크 x 잃은 체력 비율 (1 짜리 유닛은 많아야 1)
+  치료하기: 고른 다친 유닛 하나를, 전체 치료하기: 다친 유닛 모두를 가득 치료한다. 버튼 아래에 드는 잉크 (병 + 숫자).
+  흐려진 만큼 다시 칠하는 셈이라 색마다 드는 잉크 = 그 유닛을 그린 그 색 잉크 x 잃은 체력 비율 (save_data.heal_cost)
+- 아래 한 줄 도움말: 드래그 · 더블클릭
 출전 준비 (월드 화면에서 스테이지를 누르면 stage_id 를 정하고 띄운다):
 - 적 자리에 그 스테이지의 몬스터가 서 있고, 우리 전투력 vs 적 예상 전투력이 뜬다
 - 시작! 을 누르면 전투(battle_mode)로
@@ -55,7 +55,9 @@ LANE_SKEW = (56, 0, -56)                  # 먼 줄은 오른쪽으로 (비스�
 FRONT_X, BACK_X = 476, 316
 FIGURE_SCALE = 0.2                        # 자리에 서 있는 그림 배율 (체형마다 크기가 다르게 보이도록 모두 같은 배율)
 SPOT_W, SPOT_TOP = 48, 50                 # 자리 누르는 범위: 가로 ±48, 발 아래 16 ~ 위 50
-HEAL_RATE = 1.0                           # 치료: 그 유닛을 그린 잉크 x 잃은 체력 비율 x 이 배율 (검정으로)
+HEAL_RATE = 1.0                           # 치료: 그 유닛을 그린 잉크 x 잃은 체력 비율 x 이 배율 (색마다)
+HEAL_X = 112
+HEAL_Y = (536, 450)                       # 치료하기 / 전체 치료하기 버튼 y
 DOUBLE_CLICK = 0.4                        # 이 시간(초) 안에 같은 유닛을 두 번 누르면 자리에서 뺀다
 
 INK_X, INK_TOP = 1010, 668
@@ -68,7 +70,7 @@ TABS = ('all',) + frames.IDS              # 프리셋 나누기 칸
 TAB_GAP = 148
 
 stage_id = None                  # 출전 준비 중인 스테이지 (월드 화면이 정한다)
-heal_button = None
+heal_buttons = []                # [치료하기(고른 유닛), 전체 치료하기]
 panel = fade = toast_img = field_img = None
 spot_imgs = {}
 ink_icons = {}
@@ -190,37 +192,29 @@ def close():
     game_framework.pop_mode()
 
 
-def heal_targets():
-    """치료할 자리들: 다친 유닛 자리를 골라 두었으면 그 하나, 아니면 다친 유닛 모두."""
+def heal_targets(everyone):
+    """치료할 자리들: everyone 이면 다친 유닛 모두, 아니면 고른 자리의 다친 유닛 하나 (안 골랐으면 없음)."""
     hurt = save_data.hurt_slots(data()) if data() else []
-    return [selected] if selected in hurt else hurt
+    if everyone:
+        return hurt
+    return [selected] if selected in hurt else []
 
 
-def heal_cost(slots=None):
-    """slots(기본: heal_targets) 유닛을 가득 치료하는 데 드는 검정 잉크: 흐려진 만큼 다시 칠한다고 쳐서
-    유닛마다 (그린 잉크 x 잃은 체력 비율) 의 합. 다친 유닛이 있으면 적어도 1."""
-    total = 0.0
-    for s in heal_targets() if slots is None else slots:
-        unit = save_data.find_unit(data(), data()['party'][s])
-        drawn = sum(unit.get('ink', {}).values())
-        total += drawn * (1 - save_data.hp_list(data())[s]) * HEAL_RATE
-    return max(1, math.ceil(total)) if total > 0 else 0
+def heal_cost(everyone):
+    return save_data.heal_cost(data(), heal_targets(everyone), HEAL_RATE)
 
 
-def heal_picked():
-    """치료하기 버튼: 고른 다친 유닛 하나, 고른 게 없으면 다친 유닛 모두."""
+def heal(everyone):
     global selected
-    slots = heal_targets()
+    slots = heal_targets(everyone)
     if not slots:
-        say('다친 유닛이 없어요')
+        say('다친 유닛을 골라 주세요' if save_data.hurt_slots(data()) else '다친 유닛이 없어요')
         return
-    one = len(slots) == 1 and selected in slots
-    if save_data.heal(data(), slots, heal_cost(slots)):
-        say('다 나았어요!' if one else '모두 나았어요!')
-        if one:
-            selected = None
+    if save_data.heal(data(), slots, heal_cost(everyone)):
+        say('모두 나았어요!' if everyone else '다 나았어요!')
+        selected = None
     else:
-        say('검정 잉크가 모자라요')
+        say('잉크가 모자라요')
 
 
 def start_battle():
@@ -242,7 +236,7 @@ def our_power():
 # ---------------------------------------------------------------- 모드
 def init():
     global panel, fade, toast_img, field_img, spot_imgs, ink_icons, buttons, row0, tab, deleter
-    global selected, last_click, press, dragging, toast, t, heal_button
+    global selected, last_click, press, dragging, toast, t, heal_buttons
     panel = image('draw', 'panel.png')
     fade = image('common', 'fade.png')
     toast_img = image('prepare', 'toast.png')
@@ -253,7 +247,9 @@ def init():
                Button(1150, 70, 'button_close.png', 'button_close_hover.png', close, 0.4, 'draw')]
     if stage_id:
         buttons.append(Button(1130, 392, 'button_start.png', 'button_start_hover.png', start_battle, 0.6, 'world'))
-    heal_button = Button(112, 510, 'button_heal.png', 'button_heal_hover.png', heal_picked, 0.9, 'world')
+    heal_buttons = [Button(HEAL_X, HEAL_Y[0], 'button_heal.png', 'button_heal_hover.png', lambda: heal(False), 0.9, 'world'),
+                    Button(HEAL_X, HEAL_Y[1], 'button_heal_all.png', 'button_heal_all_hover.png', lambda: heal(True),
+                           1.1, 'world')]
     if data():   # 지워진 프리셋 자리는 비운다
         data()['party'] = save_data.normalize_party(data()['party'], data()['units'])
     row0 = 0
@@ -333,7 +329,7 @@ def click(mx, my):
     global row0, selected
     if any(b.click(mx, my) for b in buttons) or not data():
         return
-    if save_data.hurt_slots(data()) and heal_button.click(mx, my):
+    if save_data.hurt_slots(data()) and any(b.click(mx, my) for b in heal_buttons):
         return
     slot = slot_at(mx, my)
     if slot is not None:
@@ -363,7 +359,7 @@ def mouse_move(mx, my):
     if press and not dragging and abs(mx - press[1][0]) + abs(my - press[1][1]) > DRAG_START:
         dragging = True
     deleter.move(visible(), mx, my)
-    for b in buttons + [heal_button]:
+    for b in buttons + heal_buttons:
         b.mouse_move(mx, my)
 
 
@@ -390,7 +386,7 @@ def update():
     global t, toast
     dt = game_framework.frame_time
     t += dt
-    for b in buttons + [heal_button]:
+    for b in buttons + heal_buttons:
         b.update()
     title_mode.trail.update()
     if toast:
@@ -404,12 +400,7 @@ def draw_field():
         text.draw(f'{stage_id}  {stages.stage(stage_id)["name"]}', 46, FIELD_Y, 22, SOFT)
     else:
         text.draw('내 유닛', 46, FIELD_Y + 40, 30, INK)
-        text.draw('필드에 설 자리', 46, FIELD_Y, 20, SOFT)
     field_img.draw(FIELD_X, FIELD_Y)
-    top = FIELD_Y + 92
-    text.draw('뒷줄', BACK_X, top, 22, SOFT, 'c')
-    text.draw('앞줄', FRONT_X, top, 22, SOFT, 'c')
-    text.draw('적이 설 자리', 2 * FIELD_MID - (FRONT_X + BACK_X) / 2, top, 22, (176, 168, 184), 'c')
     for s in range(save_data.PARTY_MAX):
         spot_imgs['_enemy'].draw(*enemy_pos(s))
     if stage_id:
@@ -465,16 +456,26 @@ def draw_enemies():
     text.draw(f'적 예상 전투력  {theirs}', 1130, 300, 24, INK, 'c')
 
 
+def draw_cost(cost, cx, y):
+    """드는 잉크를 병 + 숫자로 한 줄에 (가운데 cx)."""
+    items = [(c, cost[c]) for c in painter.COLORS if cost.get(c)]
+    widths = [22 + 10 * len(str(n)) + 10 for _, n in items]
+    x = cx - (sum(widths) - 10) / 2
+    for (c, n), w in zip(items, widths):
+        ink_icons[c].draw(x + 8, y, 16, 19)
+        text.draw(str(n), x + 19, y - 1, 18, INK)
+        x += w
+
+
 def draw_heal():
-    """다친 유닛이 있으면 왼쪽에 치료하기 버튼과 드는 잉크."""
+    """다친 유닛이 있으면 왼쪽에 치료하기(고른 유닛) / 전체 치료하기 버튼, 버튼 아래에 드는 잉크."""
     if not data() or not save_data.hurt_slots(data()):
         return
-    heal_button.draw()
-    one = selected in save_data.hurt_slots(data())
-    text.draw('고른 유닛만' if one else '다친 유닛 모두', 112, 462, 20, INK, 'c')
-    text.draw(f'검정 {heal_cost()} 써요', 112, 436, 20, SOFT, 'c')
-    if not one and len(save_data.hurt_slots(data())) > 1:
-        text.draw('자리를 고르면 하나만', 112, 410, 18, SOFT, 'c')
+    for everyone, b, y in ((False, heal_buttons[0], HEAL_Y[0]), (True, heal_buttons[1], HEAL_Y[1])):
+        cost = heal_cost(everyone)
+        b.draw(1.0 if cost else 0.4)   # 고른 다친 유닛이 없으면 흐리게
+        if cost:
+            draw_cost(cost, HEAL_X, y - 46)
 
 
 def draw_ink():
@@ -504,12 +505,9 @@ def draw_presets():
         return
     if not presets():
         text.draw('이 칸에는 아직 그린 유닛이 없어요', ROW_X, GRID_Y[0], 24, SOFT)
-    if selected is not None:
-        hint = '고른 자리에 놓을 프리셋을 눌러요  ·  다른 자리를 누르면 맞바꿔요'
-    else:
-        hint = '자리를 누르고 프리셋을 고르면 그 자리에 놓여요  ·  그냥 누르면 앞줄부터  ·  더블클릭하면 빠져요'
+    hint = '드래그: 유닛 옮기기  ·  더블클릭: 유닛 빼기'
     if max_row0():
-        hint += f'  ·  휠로 더 보기 ({row0 + 1}/{max_row0() + 1})'
+        hint += f'  ·  휠: 더 보기 ({row0 + 1}/{max_row0() + 1})'
     text.draw(hint, 46, 30, 20, SOFT)
     party = data()['party']
     for unit, x, y in visible():
