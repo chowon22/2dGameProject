@@ -1,8 +1,9 @@
 """능력치를 한눈에: 막대 그래프 (유닛 그리기 화면 오른쪽) 와 한 줄 글씨 (카드 쪽지).
 
-막대 한 줄 = 이름 · 막대 · 숫자. 막대는 기본 능력치(검정 100) 의 두 배까지 채워지고,
-가운데 굵은 눈금이 기본 자리 (눈금을 넘으면 기본보다 세다). 숫자는 '지금 / 기본'.
-채워진 칸은 롤 체력바처럼 일정 간격(segment_step)마다 가는 금으로 나뉜다 — 칸 수로 크기를 가늠한다.
+막대 한 줄 = 이름 · 막대 · 숫자. 롤 체력바처럼 칸 하나 = 정해진 양 (그 틀·체형의 기본 능력치로 정한 간격,
+예: 체력 5, 공격력 1). 막대 끝은 기본의 두 배인데, 지금 값이 그보다 크면 막대가 꽉 찬 채로 끝이 늘어나
+칸이 그만큼 작아진다 (칸이 촘촘할수록 세다). 굵은 눈금이 기본(검정 100) 자리. 숫자는 '지금 / 기본'.
+칸이 너무 잘아지면(3px 아래) 열 칸마다 굵고 진한 금 하나만 긋는다.
 원소 줄은 가장 많이 칠한 색의 잉크병 + 원소 이름 + 상성 세기 막대 (stats.strength, 칠할수록 세다).
 open_canvas() 뒤에만 쓸 수 있다.
 """
@@ -33,7 +34,7 @@ def _shade(color, k=0.72):
     return tuple(int(c * k) for c in color)
 
 
-def _bar(x, y, w, frac, color, tick=None, step=None):
+def _bar(x, y, w, frac, color, tick=None, step=None):  # step: 칸 하나의 폭 (막대 전체 = 1)
     """(x, y) 왼쪽 가운데부터 폭 w 막대. frac 0~1 만큼 채우고, 채운 곳은 step(0~1 비율)마다 금을 긋고,
     tick(0~1) 자리에 굵은 세로 눈금."""
     frac = max(0.0, min(1.0, frac))
@@ -43,11 +44,15 @@ def _bar(x, y, w, frac, color, tick=None, step=None):
         fx = x + 2 + (w - 4) * frac
         draw_rectangle(x + 2, y1 + 2, fx, y2 - 2, *color, filled=True)
         draw_rectangle(x + 2, y1 + 2, fx, y1 + 4, *_shade(color, 0.85), filled=True)   # 아래쪽 그늘
+        big = False
+        while step and (w - 4) * step < 3:   # 너무 촘촘하면 열 칸마다 굵은 금 하나 (롤의 큰 눈금처럼)
+            step *= 10
+            big = True
         if step:
-            k = step
+            k, half, col = step, (1.0 if big else 0.5), _shade(color, 0.5 if big else 0.72)
             while k < frac - 1e-6:
                 sx = x + 2 + (w - 4) * k
-                draw_rectangle(sx - 0.5, y1 + 2, sx + 0.5, y2 - 2, *_shade(color), filled=True)
+                draw_rectangle(sx - half, y1 + 2, sx + half, y2 - 2, *col, filled=True)
                 k += step
     draw_rectangle(x, y1, x + w, y2, *INK, filled=False)
     if tick is not None:
@@ -65,8 +70,9 @@ def draw_bars(now, base, x, y, w=220, gap=40, label_w=58, show_buff=False):
     bx = x + label_w
     for k in keys:
         text.draw(LABELS[k], x, y, 20, INK)
-        top = base[k] * 2 or 1
-        _bar(bx, y, w, now[k] / top, COLORS[k], tick=0.5, step=segment_step(top) / top)
+        cap = base[k] * 2 or 1
+        top = max(cap, now[k])            # 넘치면 막대 끝이 늘어나 칸이 작아진다
+        _bar(bx, y, w, now[k] / top, COLORS[k], tick=base[k] / top, step=segment_step(cap) / top)
         text.draw(f'{_num(now[k])} / {_num(base[k])}', bx + w + 10, y - 1, 18, SOFT)
         y -= gap
     text.draw('원소', x, y, 20, INK)
