@@ -1,7 +1,7 @@
 """그린 유닛(프리셋) 카드 한 장 그리기. 유닛 그리기 화면과 내 유닛 화면이 함께 쓴다.
 
 카드 = 쪽지 + 무기를 손에 쥔 그림(unit_art.compose)을 잘라 줄인 썸네일 + 체형·틀 이름.
-드는 잉크는 카드에 마우스를 올렸을 때만 카드 아래 쪽지로 보인다 (draw_tip) — 색이 많아져도 잘리지 않게.
+드는 잉크와 능력치는 카드에 마우스를 올렸을 때만 카드 아래 쪽지로 보인다 (draw_tip) — 색이 많아져도 잘리지 않게.
 draw_mark: 유닛 발밑 등에 붙이는 역할 마크 (탱커 방패 / 근딜 칼 / 원딜 활 / 서포터 치료 십자, tools/gen_marks.py).
 카드에 마우스를 올리면 오른쪽 위 모서리에 지우기 × 도 뜬다. 한 번 누르면 붉게 바뀌고, 한 번 더 누르면 지운다 (Deleter).
 open_canvas() 뒤에만 쓸 수 있다.
@@ -11,6 +11,7 @@ from PIL import Image as PILImage
 
 import frames
 import save_data
+import stat_view
 import unit_art
 import text
 from assets import image
@@ -71,11 +72,15 @@ def draw_tip(unit_id, cards):
             continue
         ink = {c: n for c, n in unit.get('ink', {}).items() if n}
         msg = '  ·  '.join(f'{NAMES.get(c, c)} {n}' for c, n in ink.items()) or '잉크 0'
-        w = max(120, 14 * len(msg) + 40)
+        st = stat_view.tip_line(unit)
+        w = max(140, 13 * max(len(msg), len(st)) + 48)
         note = image('prepare', 'toast.png')
-        tx, ty = x, y - CARD_H / 2 - 18   # 카드 바로 아래
-        note.draw(tx, ty, w, 50)
-        text.draw(msg, tx, ty + 1, 20, INK, 'c')
+        tx, ty = x, y - CARD_H / 2 - 32   # 카드 바로 아래: 위 줄 드는 잉크, 아래 줄 능력치
+        if ty < 44:                       # 화면 아래로 잘리면 카드 위에
+            ty = y + CARD_H / 2 + 32
+        note.draw(tx, ty, w, 78)
+        text.draw(msg, tx, ty + 12, 20, INK, 'c')
+        text.draw(st, tx, ty - 13, 18, (150, 128, 170), 'c')
         return
 
 

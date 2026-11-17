@@ -27,6 +27,7 @@ import game_framework
 import painter
 import prepare_mode
 import save_data
+import stat_view
 import stats
 import text
 import title_mode
@@ -55,6 +56,7 @@ AREA_L, AREA_R, AREA_B, AREA_T = ROW_X - 10, 836, 26, 428
 SHEET_GAP = 30
 SIDE_X = 1040                   # 오른쪽 칸 가운데
 SIDE_L, SIDE_R = 940, 1140      # 오른쪽 버튼 두 줄
+STAT_X = 856                    # 능력치 막대 줄 왼쪽
 TOOLS = painter.COLORS + (painter.ERASER,)
 OUTSIDE = (196, 184, 210, 120)  # 칠할 수 없는 자리를 덮는 옅은 보라
 NAMES = {'black': '검정', 'red': '빨강', 'green': '초록', 'blue': '파랑'}
@@ -289,8 +291,8 @@ def init():
     # 오른쪽 두 칸: 위 줄 되돌리기·다 지우기, 아래 줄 저장하기·닫기
     buttons = [Button(x, y, f'button_{name}.png', f'button_{name}_hover.png', action, 0.3 * i, 'draw')
                for i, (name, x, y, action) in enumerate((
-                   ('undo', SIDE_L, 270, undo), ('clear', SIDE_R, 270, clear_paper),
-                   ('save', SIDE_L, 165, save_unit), ('close', SIDE_R, 165, close)))]
+                   ('undo', SIDE_L, 222, undo), ('clear', SIDE_R, 222, clear_paper),
+                   ('save', SIDE_L, 130, save_unit), ('close', SIDE_R, 130, close)))]
     tool = 'black'
     picked = painting = None
     deleter = unit_cards.Deleter()
@@ -478,25 +480,22 @@ def draw_papers():
         text.draw(s.label, s.left + 8, s.top - 16, 20, (170, 154, 186))
 
 
-def stat_line(st):
-    out = f'체력 {st["hp"]}  ·  공격력 {st["atk"]:g}'
-    return out + f'  ·  버프 {st["buff"]:g}' if frame_id == 'support' else out
-
-
 def draw_side():
+    """능력치 막대 (지금 / 기본 — 눈금이 검정 100 일 때) + 원소 + 드는 잉크, 그 아래 버튼."""
     for b in buttons:
         b.draw()
     used = ink_used()
     base = stats.unit_stats({'frame': frame_id, 'body': body, 'ink': {'black': 100 * stats.INK_PER_PERCENT}})
     now = stats.unit_stats({'frame': frame_id, 'body': body, 'ink': used, 'counts': counts()})
-    text.draw('기본 능력치 (검정 100)', SIDE_X, 428, 20, SOFT, 'c')
-    text.draw(stat_line(base), SIDE_X, 402, 24, INK, 'c')
-    text.draw('지금 능력치', SIDE_X, 366, 20, SOFT, 'c')
-    text.draw(stat_line(now) if any(used.values()) else '-', SIDE_X, 340, 24, INK, 'c')
-    lines = [f'{NAMES[c]} {used[c]}' for c in painter.COLORS if used[c]]
-    if lines:
-        text.draw('  ·  '.join(lines), SIDE_X, 310, 20, SOFT, 'c')
-    text.draw('Ctrl+Z 로도 되돌려요', SIDE_X, 92, 20, (150, 128, 170), 'c')
+    y = stat_view.draw_bars(now, base, STAT_X, 422, show_buff=frame_id == 'support')
+    text.draw('막대 가운데 눈금 = 기본 (검정 100)', STAT_X, y + 6, 16, SOFT)
+    x = STAT_X   # 드는 잉크: 병 + 숫자
+    for c in painter.COLORS:
+        if used[c]:
+            ink_icons[c].draw(x + 8, y - 22, 16, 19)
+            text.draw(str(used[c]), x + 20, y - 23, 20, INK)
+            x += 34 + 11 * len(str(used[c]))
+    text.draw('Ctrl+Z 로도 되돌려요', SIDE_X, 70, 20, (150, 128, 170), 'c')
 
 
 def draw_toast():
