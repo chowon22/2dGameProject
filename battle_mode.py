@@ -378,8 +378,7 @@ def draw_hud():
         msg = '적 차례…'
     elif actor:
         v = view_of(actor)
-        msg = f'{label(v)} 차례  —  ' + ('치료할 아군이나 공격할 적을 눌러요' if actor.role == 'support'
-                                        else '공격할 적을 눌러요')
+        msg = f'{label(v)} 차례'
     else:
         msg = ''
     text.draw(msg, W / 2, 680, 28, INK, 'c')
@@ -400,8 +399,6 @@ def draw_result():
         text.draw(got or '없음', W / 2, 374, 30, INK, 'c')
     else:
         text.draw('졌어요…', W / 2, 470, 44, INK, 'c')
-        text.draw('그림을 더 칠하거나 자리를 바꿔서 다시 와요', W / 2, 410, 26, SOFT, 'c')
-        text.draw('다친 유닛은 내 유닛에서 치료해요', W / 2, 374, 22, SOFT, 'c')
     end_button.draw()
 
 

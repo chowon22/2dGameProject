@@ -421,7 +421,6 @@ def draw_presets():
     units = shown_units()
     if not units:
         unit_cards.draw_empty(preset_x(0), PRESET_Y)
-        text.draw('그려서 저장하면 여기에 생겨요', preset_x(0) + 76, PRESET_Y, 26, (150, 128, 170))
         return
     for i, unit in enumerate(units):
         unit_cards.draw(unit, preset_x(i), PRESET_Y, on=unit['id'] == picked, delete=deleter.state(unit))
@@ -499,14 +498,13 @@ def draw_side():
     base = stats.unit_stats({'frame': frame_id, 'body': body, 'ink': {'black': 100 * stats.INK_PER_PERCENT}})
     now = stats.unit_stats({'frame': frame_id, 'body': body, 'ink': used, 'counts': counts()})
     y = stat_view.draw_bars(now, base, STAT_X, 422, show_buff=frame_id == 'support')
-    text.draw('굵은 눈금 = 기본 (검정 100)', STAT_X, y + 12, 16, SOFT)
     x = STAT_X   # 드는 잉크: 병 + 숫자
     for c in painter.COLORS:
         if used[c]:
             ink_icons[c].draw(x + 8, y - 14, 16, 19)
             text.draw(str(used[c]), x + 20, y - 15, 20, INK)
             x += 34 + 11 * len(str(used[c]))
-    text.draw('Ctrl+Z 로도 되돌려요', SIDE_X, 46, 20, (150, 128, 170), 'c')
+    text.draw('되돌리기: Ctrl+Z', SIDE_X, 46, 20, (150, 128, 170), 'c')
 
 
 def draw_toast():

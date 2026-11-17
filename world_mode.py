@@ -180,7 +180,6 @@ def draw_worlds():
         state = 'locked' if not stages.world_unlocked(data(), w['id']) else ('hover' if hover == w['id'] else 'off')
         img = image('world', f'world_{w["id"]}{"" if state == "off" else "_" + state}.png')
         img.draw(x, y + (3 * math.sin(t * 2 + w['id']) if state != 'locked' else 0))
-    text.draw('흑백이 된 세상을 하나씩 되찾아요', W / 2, 160, 24, SOFT, 'c')
 
 
 def draw_stages():
@@ -210,9 +209,6 @@ def draw_stages():
         text.draw(sid, x, y + (4 if on else 0), 28, col, 'c')
         name = st['name'] if st else '준비 중'
         text.draw(name, x, y - 66, 20, SOFT if kind == 'locked' else INK, 'c')
-    nxt = next((sid for sid in ids if stages.unlocked(data(), sid) and not stages.is_cleared(data(), sid)), None)
-    msg = f'{nxt} 에서 운반자들이 색을 나르고 있어요' if nxt else '이 월드의 색을 모두 되찾았어요!'
-    text.draw(msg, W / 2, 160, 24, SOFT, 'c')
 
 
 def draw_toast():

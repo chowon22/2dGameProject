@@ -84,7 +84,7 @@ def draw_bars(now, base, x, y, w=220, gap=40, label_w=58, show_buff=False):
         _bar(bx + 50, y, w - 50, now.get('strength', 0), painter.RGB[c])
         text.draw(f'{round(now.get("strength", 0) * 100)}%', bx + w + 10, y - 1, 18, SOFT)
     else:
-        text.draw('없음  (색을 칠하면 생겨요)', bx, y - 1, 18, SOFT)
+        text.draw('없음', bx, y - 1, 18, SOFT)
     return y - gap
 
 

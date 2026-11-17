@@ -511,10 +511,7 @@ def draw_presets():
     for i, name in enumerate(TABS):
         image('draw', f'tab_{name}{"_on" if name == tab else ""}.png').draw(tab_x(i), LIST_Y)
     if not data() or not data()['units']:
-        text.draw('아직 그린 유닛이 없어요.  유닛 추가하기에서 그려 보세요!', ROW_X, GRID_Y[0], 24, SOFT)
         return
-    if not presets():
-        text.draw('이 칸에는 아직 그린 유닛이 없어요', ROW_X, GRID_Y[0], 24, SOFT)
     hint = '드래그: 유닛 옮기기  ·  더블클릭: 유닛 빼기'
     if max_row0():
         hint += f'  ·  휠: 더 보기 ({row0 + 1}/{max_row0() + 1})'
