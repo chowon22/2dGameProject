@@ -255,6 +255,22 @@ def gear_mask(frame_id, group, body='medium'):
     return mask(g['parts'], g['size'])
 
 
+PAINT_MARGIN = 4   # 틀 윤곽 바깥으로 이만큼(px)까지는 칠해진다 (윤곽선을 따라 그은 선이 잘리지 않게)
+
+
+def paint_area(frame_id, group=None, body='medium'):
+    """(h, w) bool: 칠할 수 있는 자리 = 틀 부위 + 둘레 PAINT_MARGIN. group 이 None 이면 사람 종이, 아니면 그 무기 종이."""
+    from PIL import ImageFilter
+    m = part_mask(frame_id, body) if group is None else gear_mask(frame_id, group, body)
+    img = Image.fromarray(((m > 0) * 255).astype(np.uint8))
+    sheet = get(frame_id, body) if group is None else get(frame_id, body)['gear'][group]
+    d = ImageDraw.Draw(img)
+    for line in sheet['details']:   # 술·깃털·활시위처럼 부위 밖에 그은 밑그림 선도 칠할 수 있게
+        if line[0] != 'dot':
+            d.line(line, fill=255, width=6)
+    return np.asarray(img.filter(ImageFilter.MaxFilter(PAINT_MARGIN * 2 + 1))) > 0
+
+
 def fit(rgba, w, h, anchor='bottom'):
     """그림 배열을 w x h 로. 크기가 다르면 가로는 가운데, 세로는 아래(발)를 맞춰 자르거나 빈 칸을 붙인다."""
     sh, sw = rgba.shape[:2]

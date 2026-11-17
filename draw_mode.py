@@ -7,6 +7,7 @@
 - 잉크: 검정·빨강·초록·파랑 잉크병 + 지우개 (병 옆 숫자는 가진 잉크, 그려도 줄지 않는다) · 체형: 작은 / 보통 / 큰
 - 종이 여러 장: 왼쪽 사람 종이, 그 옆에 무기마다 한 장 (원딜은 활·화살 두 장). 체형에 따라 종이·밑그림 크기가 바뀐다.
   틀·체형을 바꿔도 그리던 그림은 발 자리를 맞춰 옮겨 온다.
+  종이는 틀 모양으로만 칠해진다 (틀 둘레 조금까지, 밖은 흐리게 덮어 둔다 — 팔다리가 따로 움직여도 어색하지 않게).
   들어오자마자 바로 그릴 수 있고, 붓질은 시작한 종이 안에서만 칠해진다. 커서 자리에 지금 붓 색·굵기의 점이 보인다.
   가진 잉크와 상관없이 어떤 색이든 마음껏 칠한다 (잉크는 내 유닛에서 놓을 때 따진다)
 오른쪽: 되돌리기 / 다 지우기 / 저장하기(프리셋에 더하고 드는 잉크를 적어 둔다) / 닫기
@@ -52,17 +53,21 @@ SHEET_GAP = 30
 SIDE_X = 1040                   # 오른쪽 칸 가운데
 SIDE_L, SIDE_R = 940, 1140      # 오른쪽 버튼 두 줄
 TOOLS = painter.COLORS + (painter.ERASER,)
+OUTSIDE = (196, 184, 210, 120)  # 칠할 수 없는 자리를 덮는 옅은 보라
 NAMES = {'black': '검정', 'red': '빨강', 'green': '초록', 'blue': '파랑'}
 
 
 class Sheet:
     """종이 한 장: 칠한 내용(Paper) + 화면에 올린 텍스처 + 자리."""
 
-    def __init__(self, label, guide, left, bottom, size):
+    def __init__(self, label, guide, left, bottom, size, area):
         self.label, self.guide, self.left = label, guide, left
         self.w, self.h = size
-        self.paper = painter.Paper(self.w, self.h)
+        self.paper = painter.Paper(self.w, self.h, area)
         self.tex = LiveImage(self.w, self.h)
+        cover = np.zeros((self.h, self.w, 4), np.uint8)
+        cover[~area] = OUTSIDE
+        self.cover = LiveImage(self.w, self.h, cover)
         self.paper.dirty = (0, 0, self.w, self.h)
         self.cx, self.cy = left + self.w / 2, bottom + self.h / 2
         self.top = bottom + self.h
@@ -155,14 +160,14 @@ def build_sheets(keep=True):
     """지금 틀·체형의 종이들을 만든다. keep 이면 그리던 그림을 (발 자리를 맞춰) 새 종이로 옮긴다."""
     global sheets, edits
     f = frames.get(frame_id, body)
-    specs = [('사람', f'guide_person_{frame_id}_{body}', f['size'])] + \
-        [(g['name'], f'guide_gear_{frame_id}_{i}_{body}', g['size']) for i, g in enumerate(f['gear'])]
+    specs = [('사람', f'guide_person_{frame_id}_{body}', f['size'], None)] + \
+        [(g['name'], f'guide_gear_{frame_id}_{i}_{body}', g['size'], i) for i, g in enumerate(f['gear'])]
     old = sheets if keep else []
-    total_w = sum(sz[0] for _, _, sz in specs) + SHEET_GAP * (len(specs) - 1)
-    bottom = round((AREA_B + AREA_T) / 2 - max(sz[1] for _, _, sz in specs) / 2)
+    total_w = sum(sp[2][0] for sp in specs) + SHEET_GAP * (len(specs) - 1)
+    bottom = round((AREA_B + AREA_T) / 2 - max(sp[2][1] for sp in specs) / 2)
     new, x = [], round((AREA_L + AREA_R) / 2 - total_w / 2)
-    for i, (label, guide, size) in enumerate(specs):
-        s = Sheet(label, guide, x, bottom, size)
+    for i, (label, guide, size, group) in enumerate(specs):
+        s = Sheet(label, guide, x, bottom, size, frames.paint_area(frame_id, group, body))
         if i < len(old) and not old[i].paper.is_empty():
             s.paper.load_rgba(frames.fit(old[i].paper.rgba(), *size))
             s.paper.history.clear()
@@ -460,6 +465,7 @@ def draw_brush_tip():
 def draw_papers():
     for s in sheets:
         image('draw', f'paper_{s.w}x{s.h}.png').draw(s.cx, s.cy)
+        s.cover.draw(s.cx, s.cy)
         image('draw', s.guide + '.png').draw(s.cx, s.cy)
         s.tex.draw(s.cx, s.cy)
         text.draw(s.label, s.left + 8, s.top - 16, 20, (170, 154, 186))

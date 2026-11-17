@@ -8,6 +8,7 @@
 - counts / ink_used: 색별 픽셀 수, 그만큼 드는 잉크
 - save_png / load_png: PNG 로 저장·불러오기 (#3)
 - undo: 붓질 한 번·다 지우기·불러오기를 하나씩 되돌린다 (최근 MAX_UNDO 번)
+- area: 칠할 수 있는 자리 (h, w) bool. 주면 그 밖에는 붓이 칠해지지 않고, 불러온 그림도 그 밖은 버린다 (틀 모양 종이)
 """
 import math
 
@@ -36,8 +37,9 @@ def ink_for(pixels):
 
 
 class Paper:
-    def __init__(self, w, h):
+    def __init__(self, w, h, area=None):
         self.w, self.h = w, h
+        self.area = None if area is None else np.asarray(area, dtype=bool)
         self.labels = np.zeros((h, w), dtype=np.uint8)
         self.counts = np.zeros(len(COLORS) + 1, dtype=np.int64)
         self.dirty = None       # 다시 그려야 할 영역 (x0, y0, x1, y1). 화면 쪽이 가져가면 None 으로
@@ -112,6 +114,8 @@ class Paper:
         mask = (xx + 0.5 - x) ** 2 + (yy + 0.5 - y) ** 2 <= r * r
         region = self.labels[y0:y1, x0:x1]
         new = label_of(tool)
+        if new and self.area is not None:
+            mask &= self.area[y0:y1, x0:x1]
         changed = mask & (region != new)
         if not changed.any():
             return True
@@ -167,5 +171,7 @@ class Paper:
         dx0, dy0 = max(0, ox), max(0, oy)
         cw, ch = min(w - sx0, self.w - dx0), min(h - sy0, self.h - dy0)
         labels[dy0:dy0 + ch, dx0:dx0 + cw] = lab[sy0:sy0 + ch, sx0:sx0 + cw]
+        if self.area is not None:
+            labels[~self.area] = 0
         self.snapshot()
         self._set_labels(labels)

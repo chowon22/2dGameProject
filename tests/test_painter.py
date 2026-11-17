@@ -181,6 +181,23 @@ class FramesTest(unittest.TestCase):
             self.assertLess(piv['leg_l'][1], piv['leg_l'][1] + 1)
             self.assertLess(piv['arm_r'][1], piv['leg_r'][1])                      # 어깨가 엉덩이보다 위
 
+    def test_paint_only_inside_frame(self):
+        for fid in frames.IDS:
+            area = frames.paint_area(fid, None, 'medium')
+            p = Paper(*frames.get(fid)['size'], area)
+            p.begin(0, 0, 'black', PLENTY)                 # 왼쪽 위 구석(틀 밖)에서
+            p.drag(frames.X, 300, 'black', PLENTY)         # 몸통까지 그으면
+            p.end()
+            self.assertFalse(p.labels[~area].any(), fid)   # 틀 밖은 안 칠해지고
+            self.assertTrue(p.labels[area].any(), fid)     # 틀 안은 칠해진다
+            self.assertTrue(area[frames.part_mask(fid) > 0].all(), fid)   # 틀 전체가 칠할 자리
+            q = Paper(*p.labels.shape[::-1], area)
+            q.load_rgba(np.full((*p.labels.shape, 4), 255, np.uint8))   # 불러온 그림도 틀 밖은 버린다
+            self.assertEqual(q.count('black') + q.count('red') + q.count('green') + q.count('blue'), int(area.sum()))
+            for i in range(len(frames.get(fid)['gear'])):
+                g = frames.paint_area(fid, i, 'large')
+                self.assertEqual(g.shape, frames.get(fid, 'large')['gear'][i]['size'][::-1])
+
     def test_fit_keeps_feet(self):
         img = np.zeros((390, 280, 4), np.uint8)
         img[389, 140] = 255                       # 맨 아래 가운데
